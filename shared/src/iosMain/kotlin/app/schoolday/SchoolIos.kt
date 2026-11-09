@@ -75,6 +75,8 @@ class SchoolIos(secure: SecureStore) {
         L.apply(prefs.value.lang)
         vm = AppViewModel(platform, Repository(platform, prefs))
         intro = IntroState(willPlay = prefs.value.onboarded && platform.introBlocker() == null)
+        // SwiftUI doesn't reliably report "became active" for the launch itself, and Today has no load of its own.
+        vm.refreshAll()
     }
 
     fun makeViewController(): UIViewController = ComposeUIViewController {

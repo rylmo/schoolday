@@ -19,7 +19,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.datetime.LocalDate
+
+private const val CLASS_LIST_REFRESH_DELAY_MS = 8_000L
 
 data class UiState<T>(val data: T? = null, val loading: Boolean = false, val error: String? = null)
 data class TtKey(val classId: String, val mode: TimetableMode)
@@ -69,6 +72,7 @@ class AppViewModel(private val platform: Platform, private val repo: Repository)
         }
         viewModelScope.launch {
             repo.classes().data?.let { _classes.value = it }
+            delay(CLASS_LIST_REFRESH_DELAY_MS) // parsing that page is heavy; keep it clear of startup
             repo.classes(force = true).data?.let { _classes.value = it }
         }
     }

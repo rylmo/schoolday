@@ -14,6 +14,8 @@ kotlin {
         binaries.framework {
             baseName = "Shared"
             isStatic = true
+            // Marks memory concurrently, so garbage collection pauses the UI for less time.
+            freeCompilerArgs += "-Xbinary=gc=cms"
         }
     }
 

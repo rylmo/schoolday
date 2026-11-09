@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import com.fleeksoft.ksoup.Ksoup
 import kotlinx.datetime.LocalDate
+import kotlin.time.TimeSource
 
 /**
  * Reads the public Bakaláři timetable. Each class page embeds the whole week as JSON
@@ -30,8 +31,13 @@ object BakalariClient {
     }
 
     suspend fun timetable(classId: String, mode: TimetableMode): Timetable {
+        val started = TimeSource.Monotonic.markNow()
         val html = Http.get("$BASE/${mode.path}/Class/$classId")
-        return parse(html, classId, mode)
+        val downloaded = started.elapsedNow()
+        return parse(html, classId, mode).also {
+            val parsing = started.elapsedNow() - downloaded
+            Diag.note("timetable $classId ${mode.name}: download ${downloaded.inWholeMilliseconds} ms, parse ${parsing.inWholeMilliseconds} ms")
+        }
     }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }

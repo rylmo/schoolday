@@ -3,6 +3,8 @@ package app.schoolday.data
 import app.schoolday.Platform
 import app.schoolday.ui.S
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -195,6 +197,8 @@ class Repository(private val platform: Platform, val prefs: Prefs) {
         appendLine("Classes: ${s.shownClasses.joinToString()} · mine: ${s.myClass} · iCanteen: ${if (s.hasICanteen) "logged in" else "no"} · theme: ${s.theme}")
         platform.cacheAges().sortedBy { it.first }.forEach { (name, age) -> appendLine("cache $name: $age min old") }
         appendLine("Launch animation: ${Diag.intro}")
+        appendLine("Load times:")
+        if (Diag.loadTimes.isEmpty()) appendLine("  none") else Diag.loadTimes.forEach { appendLine("  $it") }
         appendLine("Recent errors:")
         if (errors.isEmpty()) appendLine("  none") else errors.toList().forEach { appendLine("  $it") }
     }
@@ -232,4 +236,9 @@ fun Throwable.friendly(): String = when {
 /** Facts for Settings > Copy debug info. */
 object Diag {
     var intro: String = "not run"
+
+    private val timings = MutableStateFlow(emptyList<String>())
+    val loadTimes: List<String> get() = timings.value
+
+    fun note(line: String) = timings.update { (it + line).takeLast(12) }
 }
