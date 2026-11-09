@@ -14,53 +14,58 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
-
-/** Contents of update.json, published next to each release. */
-@Serializable
-data class UpdateInfo(
-    val versionCode: Int,
-    val versionName: String,
-    val url: String,
-    val sha256: String,
-    val minSdk: Int = 0,
-)
 
 /**
  * Self-updating: reads a small manifest from the latest GitHub release and installs newer
  * APKs through Android's PackageInstaller. Android itself refuses any APK that isn't signed
  * with the same key as the installed app, and the download is checked against the manifest.
  */
-object Updater {
+object Updater : AppUpdater {
+    private lateinit var appContext: Context
+    private val http = OkHttpClient()
+
+    fun attach(ctx: Context) { appContext = ctx.applicationContext }
+
     private val json = Json { ignoreUnknownKeys = true }
 
     val enabled: Boolean get() = BuildConfig.UPDATE_MANIFEST_URL.isNotEmpty()
 
     /** Set when the system reports a failed install (the app is still running to show it). */
     private val _installError = MutableStateFlow<String?>(null)
-    val installError = _installError.asStateFlow()
-    fun clearInstallError() { _installError.value = null }
+    override val installError = _installError.asStateFlow()
+    override fun clearInstallError() { _installError.value = null }
     internal fun reportInstallError(message: String) { _installError.value = message }
 
     /** The newer version on offer, or null if up to date. Throws on network problems. */
-    suspend fun check(): UpdateInfo? {
+    override suspend fun check(): UpdateInfo? {
         if (!enabled) return null
         val info = json.decodeFromString(UpdateInfo.serializer(), Http.get(BuildConfig.UPDATE_MANIFEST_URL))
         return info.takeIf { it.versionCode > BuildConfig.VERSION_CODE && Build.VERSION.SDK_INT >= it.minSdk }
     }
 
+    override fun canInstall(): Boolean = appContext.packageManager.canRequestPackageInstalls()
+
+    override fun openInstallSettings() {
+        appContext.startActivity(
+            Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${appContext.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+
     /** Downloads and verifies the APK. [onProgress] gets 0..1 (or -1 if the size is unknown). */
-    suspend fun download(ctx: Context, info: UpdateInfo, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
+    override suspend fun download(info: UpdateInfo, onProgress: (Float) -> Unit): String = withContext(Dispatchers.IO) {
+        val ctx = appContext
         if (!info.url.startsWith("https://")) throw IOException("Insecure update URL")
         val dir = File(ctx.cacheDir, "updates").apply { deleteRecursively(); mkdirs() }
         val file = File(dir, "schoolday-${info.versionCode}.apk")
         val digest = MessageDigest.getInstance("SHA-256")
-        Http.client.newCall(Request.Builder().url(info.url).header("User-Agent", Http.USER_AGENT).build()).execute().use { r ->
+        http.newCall(Request.Builder().url(info.url).header("User-Agent", Http.userAgent).build()).execute().use { r ->
             if (!r.isSuccessful) throw IOException("HTTP ${r.code}")
             val body = r.body ?: throw IOException("Empty download")
             val total = body.contentLength()
@@ -88,11 +93,13 @@ object Updater {
             file.delete()
             throw IOException(S.updateBadFile)
         }
-        file
+        file.path
     }
 
     /** Hands the verified APK to Android. The app is closed by the system while it installs. */
-    suspend fun install(ctx: Context, apk: File) = withContext(Dispatchers.IO) {
+    override suspend fun install(path: String) = withContext(Dispatchers.IO) {
+        val ctx = appContext
+        val apk = File(path)
         val installer = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(ctx.packageName)
@@ -113,6 +120,7 @@ object Updater {
             )
             session.commit(callback.intentSender)
         }
+        Unit
     }
 }
 

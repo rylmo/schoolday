@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import app.schoolday.R
 import app.schoolday.app
 import app.schoolday.data.TimetableMode
+import app.schoolday.data.todayDate
 import app.schoolday.logic.LunchWindow
 import app.schoolday.logic.day
 import app.schoolday.logic.lunchWindow
@@ -34,7 +35,7 @@ object LunchNotifier {
     private const val CHANNEL = "lunch"
     private const val NOTIF_ID = 1001
     const val EXTRA_OPEN = "open"
-    const val OPEN_LUNCH_TODAY = "lunch_today"
+    const val OPEN_LUNCH_TODAY = app.schoolday.ui.OPEN_LUNCH_TODAY
 
     fun createChannel(ctx: Context) {
         val ch = NotificationChannel(CHANNEL, app.schoolday.ui.S.channelName, NotificationManager.IMPORTANCE_LOW).apply {
@@ -49,7 +50,7 @@ object LunchNotifier {
     private fun todayWindow(ctx: Context): LunchWindow? {
         val s = ctx.app.prefs.value
         val tt = ctx.app.repo.cachedTimetable(s.myClass, TimetableMode.Actual) ?: return null
-        return tt.day(LocalDate.now())?.lunchWindow()
+        return tt.day(todayDate())?.lunchWindow()
     }
 
     private fun millisAt(minutes: Int): Long =
@@ -94,7 +95,7 @@ object LunchNotifier {
     /** Text for the notification, or null when iCanteen says no lunch is ordered today. */
     private fun mealTitle(ctx: Context): String? {
         val menu = ctx.app.repo.cachedLunch() ?: return app.schoolday.ui.S.notifFallback
-        val day = menu.day(LocalDate.now()) ?: return app.schoolday.ui.S.notifFallback
+        val day = menu.day(todayDate()) ?: return app.schoolday.ui.S.notifFallback
         val (meal, _) = menu.myMeal(day) ?: return null
         return shortDish(meal.name)
     }
@@ -138,7 +139,7 @@ class LunchReceiver : BroadcastReceiver() {
         val s = context.app.prefs.value
         if (!s.lunchNotification) return
         val tt = context.app.repo.cachedTimetable(s.myClass, TimetableMode.Actual) ?: return
-        val w = tt.day(LocalDate.now())?.lunchWindow() ?: return
+        val w = tt.day(todayDate())?.lunchWindow() ?: return
         if (nowMinutes() < w.end) LunchNotifier.show(context, w)
     }
 }

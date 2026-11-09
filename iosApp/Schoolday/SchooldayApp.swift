@@ -1,0 +1,77 @@
+import Security
+import Shared
+import SwiftUI
+
+/// Stores the iCanteen password in the iOS Keychain.
+final class KeychainStore: NSObject, SecureStore {
+    private func query(_ key: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: "schoolday",
+         kSecAttrAccount as String: key]
+    }
+
+    func get(key: String) -> String? {
+        var q = query(key)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: AnyObject?
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    func set(key: String, value: String?) {
+        SecItemDelete(query(key) as CFDictionary)
+        guard let value, let data = value.data(using: .utf8) else { return }
+        var q = query(key)
+        q[kSecValueData as String] = data
+        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        SecItemAdd(q as CFDictionary, nil)
+    }
+}
+
+/// Mirrors the shared app's navigation state so SwiftUI can draw the native controls.
+final class AppModel: NSObject, ObservableObject, ChromeListener {
+    let core = SchoolIos(secure: KeychainStore())
+    @Published var tab = 0
+    @Published var settingsOpen = false
+    @Published var barVisible = false
+    @Published var dark = true
+    @Published var titles = ["Today", "Timetable", "Lunch"]
+
+    override init() {
+        super.init()
+        core.chrome.listener = self
+    }
+
+    func changed(tab: Int32, settingsOpen: Bool, visible: Bool, dark: Bool, titles: [String]) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            self.tab = Int(tab)
+            self.settingsOpen = settingsOpen
+            self.barVisible = visible
+        }
+        self.dark = dark
+        self.titles = titles
+    }
+}
+
+struct ComposeHost: UIViewControllerRepresentable {
+    let core: SchoolIos
+    func makeUIViewController(context: Context) -> UIViewController { core.makeViewController() }
+    func updateUIViewController(_ controller: UIViewController, context: Context) {}
+}
+
+@main
+struct SchooldayApp: App {
+    @StateObject private var model = AppModel()
+    @Environment(\.scenePhase) private var phase
+
+    var body: some Scene {
+        WindowGroup {
+            RootView(model: model)
+                .preferredColorScheme(model.dark ? .dark : .light)
+        }
+        .onChange(of: phase) { newPhase in
+            if newPhase == .active { model.core.onForeground() }
+        }
+    }
+}

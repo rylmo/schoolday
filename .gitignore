@@ -9,3 +9,7 @@ local.properties
 signing/
 *.apk
 *.ipa
+iosApp/Schoolday.xcodeproj/
+iosApp/build/
+iosApp/Payload/
+iosApp/Schoolday/Info.plist
