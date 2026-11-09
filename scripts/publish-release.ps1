@@ -6,7 +6,8 @@
 
 param([string]$Notes = "")
 
-$ErrorActionPreference = "Stop"
+# Native tools report failure through $LASTEXITCODE, which is checked after each one.
+$ErrorActionPreference = "Continue"
 Set-Location (Join-Path $PSScriptRoot "..")
 
 $repo = "rylmo/schoolday"
@@ -28,7 +29,7 @@ $out = "build\release"
 New-Item -ItemType Directory -Force $out | Out-Null
 $apkName = "Schoolday-$name.apk"
 $apk = Join-Path $out $apkName
-Copy-Item "app\build\outputs\apk\release\app-release.apk" $apk -Force
+Copy-Item "app\build\outputs\apk\release\app-release.apk" $apk -Force -ErrorAction Stop
 
 $sha = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
 $manifest = Join-Path $out "update.json"
