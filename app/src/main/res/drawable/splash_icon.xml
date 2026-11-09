@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launch-screen icon (no background): 288dp canvas, glyph in a 128dp box at the centre.
+     The startup animation (ui/Intro.kt) draws exactly this picture on its first frame. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+    <group
+        android:translateX="80"
+        android:translateY="80"
+        android:scaleX="0.8"
+        android:scaleY="0.8">
+        <path android:fillColor="#ECE9E2" android:pathData="M43,34h74a7,7 0 0 1 0,14h-74a7,7 0 0 1 0,-14z" />
+        <path android:fillColor="#ECE9E2" android:pathData="M43,56h74a7,7 0 0 1 0,14h-74a7,7 0 0 1 0,-14z" />
+        <path
+            android:strokeColor="#F2A65A"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000"
+            android:pathData="M118,85H66M66,78V92M66,78H44M66,85H44M66,92H44" />
+        <path android:fillColor="#ECE9E2" android:pathData="M43,100h74a7,7 0 0 1 0,14h-74a7,7 0 0 1 0,-14z" />
+        <path android:fillColor="#5C5E66" android:pathData="M43,122h42a7,7 0 0 1 0,14h-42a7,7 0 0 1 0,-14z" />
+    </group>
+</vector>

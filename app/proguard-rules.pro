@@ -1,0 +1,10 @@
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.**
+-keep,includedescriptorclasses class app.schoolday.**$$serializer { *; }
+-keepclassmembers class app.schoolday.** { *** Companion; }
+-keepclasseswithmembers class app.schoolday.** { kotlinx.serialization.KSerializer serializer(...); }
+-dontwarn org.jspecify.annotations.**
+-dontwarn okhttp3.internal.platform.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
