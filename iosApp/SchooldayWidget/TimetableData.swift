@@ -190,7 +190,28 @@ enum WidgetCache {
     }
 
     static func save(_ classId: String, _ days: [WidgetDay]) {
-        if let data = try? JSONEncoder().encode(days) { defaults.set(data, forKey: "tt.\(classId)") }
+        if let data = try? JSONEncoder().encode(days) {
+            defaults.set(data, forKey: "tt.\(classId)")
+            defaults.set(Date(), forKey: "fetchedAt.\(classId)")
+        }
+    }
+
+    /// How old the saved copy is; infinite when there is none.
+    static func age(_ classId: String, now: Date = Date()) -> TimeInterval {
+        guard let at = defaults.object(forKey: "fetchedAt.\(classId)") as? Date else { return .infinity }
+        return now.timeIntervalSince(at)
+    }
+
+    /// The last arrow tap: when, and which way (-1 up, +1 down). Taps redraw from the saved copy,
+    /// and the direction decides which way the rows slide.
+    static func noteTap(_ step: Int) {
+        defaults.set(Date(), forKey: "tapAt")
+        defaults.set(step, forKey: "tapStep")
+    }
+
+    static func recentTap(now: Date = Date()) -> Int? {
+        guard let at = defaults.object(forKey: "tapAt") as? Date, now.timeIntervalSince(at) < 10 else { return nil }
+        return defaults.integer(forKey: "tapStep")
     }
 
     /// Why the last fetch failed, shown under "Can't load the timetable".

@@ -37,6 +37,11 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CADisableMinimumFrameDurationOnPhone: true
         ITSAppUsesNonExemptEncryption: false
+        # schoolday://timetable/<class id>, opened by tapping the widget
+        CFBundleURLTypes:
+          - CFBundleURLName: app.schoolday.ios
+            CFBundleURLSchemes:
+              - schoolday
         UILaunchScreen:
           UIColorName: LaunchColor
         UISupportedInterfaceOrientations:

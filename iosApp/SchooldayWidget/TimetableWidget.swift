@@ -20,6 +20,26 @@ private enum W {
     static var offline: String { t("offline", "offline") }
 }
 
+// MARK: - layout numbers (shared by the provider, which plans the windows, and the views)
+
+private enum Metrics {
+    static let padding: CGFloat = 12
+    static let headerHeight: CGFloat = 16
+    static let headerGap: CGFloat = 6
+    static let rowGap: CGFloat = 4
+    static let rowHeight: CGFloat = 30
+    /// Each extra group in a merged row adds a detail line (medium only).
+    static let extraLine: CGFloat = 13
+    static let maxGroupLines = 3
+    static let arrowSize: CGFloat = 34
+    /// How far each arrow tap moves.
+    static let step = 2
+
+    static func height(_ row: LessonRow, small: Bool) -> CGFloat {
+        small ? rowHeight : rowHeight + extraLine * CGFloat(min(row.parts.count, maxGroupLines) - 1)
+    }
+}
+
 // MARK: - configuration
 
 struct ClassEntity: AppEntity {
@@ -61,7 +81,7 @@ struct TimetableWidgetIntent: WidgetConfigurationIntent {
     var schoolClass: ClassEntity?
 }
 
-/// The ◀ ▶ buttons: move three lessons back or forward through the week.
+/// The ▲ ▼ buttons: move two lines up or down through the week.
 struct ShiftPageIntent: AppIntent {
     static var title: LocalizedStringResource = "Show other lessons"
     static var isDiscoverable = false
@@ -77,59 +97,116 @@ struct ShiftPageIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
+        WidgetCache.noteTap(step)
         WidgetCache.setOffset(classId, WidgetCache.offset(classId) + step)
         return .result()
     }
 }
 
-// MARK: - pages
+// MARK: - rows and windows
 
-/// A screenful of lessons: up to [pageSize] lessons of one day.
-struct Page: Hashable {
-    var day: WidgetDay
-    var lessons: [WidgetLesson]
+/// Everything in one time slot. Groups of the class (ASW1 and ASW2, Aj1 and Nj…) become one row,
+/// since the public timetable can't tell which group you're in.
+struct LessonRow: Hashable {
+    var period: String
+    var start: Int
+    var end: Int
+    var parts: [WidgetLesson]
+
+    var changed: Bool { parts.contains { $0.changed } }
+    var cancelled: Bool { parts.allSatisfy { $0.cancelled } }
+
+    private func distinct(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
+
+    var subject: String { distinct(parts.map(\.subject)).joined(separator: " / ") }
+    var abbrev: String { distinct(parts.map { $0.abbrev.isEmpty ? $0.subject : $0.abbrev }).joined(separator: "/") }
+    var rooms: String { distinct(parts.map(\.room)).joined(separator: " · ") }
+    var mixedSubjects: Bool { distinct(parts.map(\.subject)).count > 1 }
+
+    static func of(_ day: WidgetDay) -> [LessonRow] {
+        var rows: [LessonRow] = []
+        for lesson in day.lessons {
+            if let i = rows.firstIndex(where: { $0.start == lesson.start }) {
+                rows[i].parts.append(lesson)
+                rows[i].end = max(rows[i].end, lesson.end)
+            } else {
+                rows.append(LessonRow(period: lesson.period, start: lesson.start, end: lesson.end, parts: [lesson]))
+            }
+        }
+        return rows.sorted { $0.start < $1.start }
+    }
 }
 
-private let pageSize = 3
+/// What the widget shows at once: some rows of one day.
+struct Window: Hashable {
+    var day: WidgetDay
+    var first: Int
+    var rows: [LessonRow]
 
-enum Pages {
-    /// Every page of the two weeks, and the one to show by itself: the current lesson today,
-    /// or the next school day once today's lessons are over.
-    static func build(_ days: [WidgetDay], now: Date) -> (pages: [Page], auto: Int) {
+    var key: String { "\(day.date)#\(first)" }
+}
+
+enum Windows {
+    /// Every window of the two weeks, moving two rows at a time, and the one shown by itself:
+    /// starting at the current lesson today, or the next school day once today's lessons are over.
+    static func build(_ days: [WidgetDay], now: Date, budget: CGFloat, small: Bool) -> (windows: [Window], auto: Int) {
         let todayKey = WidgetDates.key(now)
         let minute = WidgetDates.minutes(now)
         let sorted = days.sorted { $0.date < $1.date }
 
-        // the day shown automatically, and the lesson it starts at
         var autoDay = sorted.firstIndex { $0.date > todayKey && !$0.realLessons.isEmpty } ?? max(sorted.count - 1, 0)
-        var autoLesson = 0
-        if let t = sorted.firstIndex(where: { $0.date == todayKey }),
-           let end = sorted[t].endTime, minute < end {
+        var autoRow = 0
+        if let t = sorted.firstIndex(where: { $0.date == todayKey }), let end = sorted[t].endTime, minute < end {
             autoDay = t
-            autoLesson = sorted[t].lessons.firstIndex { $0.end > minute } ?? 0
+            autoRow = LessonRow.of(sorted[t]).firstIndex { $0.end > minute } ?? 0
         }
 
-        var pages: [Page] = []
+        var windows: [Window] = []
         var auto = 0
         for (i, day) in sorted.enumerated() {
-            if i == autoDay { auto = pages.count }
-            guard !day.lessons.isEmpty else {
-                pages.append(Page(day: day, lessons: []))
+            let rows = LessonRow.of(day)
+            guard !rows.isEmpty else {
+                if i == autoDay { auto = windows.count }
+                windows.append(Window(day: day, first: 0, rows: []))
                 continue
             }
-            // On the automatic day, pages are aligned so one starts exactly at the current lesson.
-            var start = 0
-            if i == autoDay, autoLesson % pageSize != 0 {
-                pages.append(Page(day: day, lessons: Array(day.lessons[0 ..< autoLesson % pageSize])))
-                start = autoLesson % pageSize
+            let begin = i == autoDay ? autoRow : 0
+            var starts: [Int] = []
+            // upwards from the starting row…
+            var s = begin - Metrics.step
+            while s > 0 { starts.insert(s, at: 0); s -= Metrics.step }
+            if begin > 0 { starts.insert(0, at: 0) }
+            // …and downwards until the last row has been shown
+            s = begin
+            while true {
+                starts.append(s)
+                let fits = fitting(rows, from: s, budget: budget, small: small)
+                if s + fits >= rows.count { break }
+                s += max(1, min(Metrics.step, fits))
             }
-            while start < day.lessons.count {
-                if i == autoDay, start == autoLesson { auto = pages.count }
-                pages.append(Page(day: day, lessons: Array(day.lessons[start ..< min(start + pageSize, day.lessons.count)])))
-                start += pageSize
+            for start in starts {
+                if i == autoDay, start == begin { auto = windows.count }
+                let fits = fitting(rows, from: start, budget: budget, small: small)
+                windows.append(Window(day: day, first: start, rows: Array(rows[start ..< min(start + fits, rows.count)])))
             }
         }
-        return (pages, auto)
+        return (windows, auto)
+    }
+
+    /// How many rows from [start] fit in [budget] points (always at least one).
+    private static func fitting(_ rows: [LessonRow], from start: Int, budget: CGFloat, small: Bool) -> Int {
+        var used: CGFloat = 0
+        var count = 0
+        for row in rows[start...] {
+            let h = Metrics.height(row, small: small) + (count > 0 ? Metrics.rowGap : 0)
+            if count > 0, used + h > budget { break }
+            used += h
+            count += 1
+        }
+        return max(count, 1)
     }
 }
 
@@ -139,52 +216,64 @@ struct TimetableEntry: TimelineEntry {
     let date: Date
     let classId: String?
     let className: String?
-    let page: Page?
-    let canBack: Bool
-    let canForward: Bool
+    let window: Window?
+    let canUp: Bool
+    let canDown: Bool
+    /// Which way the rows slide in: -1 from the top (going up), +1 from the bottom.
+    let direction: Int
     let offline: Bool
-    let failed: Bool
 }
 
 struct TimetableProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> TimetableEntry {
-        TimetableEntry(date: Date(), classId: nil, className: "IT3B", page: Self.sample, canBack: true, canForward: true, offline: false, failed: false)
+        TimetableEntry(date: Date(), classId: nil, className: "IT3B", window: Self.sample, canUp: true, canDown: true, direction: 1, offline: false)
     }
 
     func snapshot(for configuration: TimetableWidgetIntent, in context: Context) async -> TimetableEntry {
         if context.isPreview, configuration.schoolClass == nil { return placeholder(in: context) }
-        return await entries(for: configuration, now: Date()).first ?? placeholder(in: context)
+        return await entries(for: configuration, in: context, now: Date()).first ?? placeholder(in: context)
     }
 
     func timeline(for configuration: TimetableWidgetIntent, in context: Context) async -> Timeline<TimetableEntry> {
         let now = Date()
-        let list = await entries(for: configuration, now: now)
-        // Fetch again regularly; between fetches the extra entries roll the view to the current lesson.
+        let list = await entries(for: configuration, in: context, now: now)
         return Timeline(entries: list, policy: .after(now.addingTimeInterval(45 * 60)))
     }
 
-    private func entries(for configuration: TimetableWidgetIntent, now: Date) async -> [TimetableEntry] {
-        guard let cls = configuration.schoolClass else {
-            return [TimetableEntry(date: now, classId: nil, className: nil, page: nil, canBack: false, canForward: false, offline: false, failed: false)]
+    /// The saved copy when it is fresh or the user just tapped an arrow (so taps redraw at once),
+    /// otherwise both weeks from Bakaláři.
+    private func loadDays(for classId: String, now: Date) async -> (days: [WidgetDay], offline: Bool) {
+        let cached = WidgetCache.load(classId)
+        if let cached, !cached.isEmpty, WidgetCache.age(classId, now: now) < 20 * 60 || WidgetCache.recentTap(now: now) != nil {
+            return (cached, false)
         }
-        var days: [WidgetDay] = []
-        var offline = false
         do {
-            async let thisWeek = Bakalari.week(classId: cls.id, next: false)
-            async let nextWeek = try? Bakalari.week(classId: cls.id, next: true)
+            async let thisWeek = Bakalari.week(classId: classId, next: false)
+            async let nextWeek = try? Bakalari.week(classId: classId, next: true)
             let current = try await thisWeek
             let upcoming = await nextWeek ?? []
-            days = current + upcoming
-            WidgetCache.save(cls.id, days)
+            let fresh = current + upcoming
+            WidgetCache.save(classId, fresh)
             WidgetCache.lastError = nil
+            return (fresh, false)
         } catch {
             WidgetCache.lastError = String(describing: error)
-            days = WidgetCache.load(cls.id) ?? []
-            offline = true
+            return (cached ?? [], true)
         }
+    }
+
+    private func entries(for configuration: TimetableWidgetIntent, in context: Context, now: Date) async -> [TimetableEntry] {
+        guard let cls = configuration.schoolClass else {
+            return [TimetableEntry(date: now, classId: nil, className: nil, window: nil, canUp: false, canDown: false, direction: 1, offline: false)]
+        }
+        let (days, offline) = await loadDays(for: cls.id, now: now)
         guard !days.isEmpty else {
-            return [TimetableEntry(date: now, classId: cls.id, className: cls.name, page: nil, canBack: false, canForward: false, offline: offline, failed: true)]
+            return [TimetableEntry(date: now, classId: cls.id, className: cls.name, window: nil, canUp: false, canDown: false, direction: 1, offline: offline)]
         }
+
+        let small = context.family == .systemSmall
+        let height = context.displaySize.height > 0 ? context.displaySize.height : 169
+        let budget = height - 2 * Metrics.padding - Metrics.headerHeight - Metrics.headerGap
 
         // now, and each lesson end today, so the widget moves on as lessons finish
         let todayKey = WidgetDates.key(now)
@@ -196,27 +285,33 @@ struct TimetableProvider: AppIntentTimelineProvider {
             .prefix(10)
 
         let offset = WidgetCache.offset(cls.id, now: now)
+        let direction = WidgetCache.recentTap(now: now) ?? 1
         return times.map { time in
-            let built = Pages.build(days, now: time)
-            let index = min(max(built.auto + offset, 0), max(built.pages.count - 1, 0))
+            let built = Windows.build(days, now: time, budget: budget, small: small)
+            let index = min(max(built.auto + offset, 0), max(built.windows.count - 1, 0))
             if time == now, index - built.auto != offset {
-                WidgetCache.setOffset(cls.id, index - built.auto) // don't let taps pile up past either end
+                WidgetCache.setOffset(cls.id, index - built.auto) // taps past either end don't pile up
             }
             return TimetableEntry(
                 date: time, classId: cls.id, className: cls.name,
-                page: built.pages.isEmpty ? nil : built.pages[index],
-                canBack: index > 0, canForward: index < built.pages.count - 1,
-                offline: offline, failed: false
+                window: built.windows.isEmpty ? nil : built.windows[index],
+                canUp: index > 0, canDown: index < built.windows.count - 1,
+                direction: time == now ? direction : 1, offline: offline
             )
         }
     }
 
-    static let sample = Page(
+    static let sample = Window(
         day: WidgetDay(date: WidgetDates.key(Date()), dayOff: false, dayOffName: "", lessons: []),
-        lessons: [
-            WidgetLesson(period: "1", start: 480, end: 525, subject: "Základy společenských věd", abbrev: "ZSV", detail: "V311 · Mgr. Dana Vejmelková", room: "V311", changed: true, cancelled: false),
-            WidgetLesson(period: "2", start: 530, end: 575, subject: "Základy elektrotechniky", abbrev: "ZET", detail: "V311 · Ing. Evžen Žabčík", room: "V311", changed: false, cancelled: false),
-            WidgetLesson(period: "3", start: 590, end: 635, subject: "Anglický jazyk", abbrev: "AJ", detail: "Aj1 · V311 · Mgr. Pavlína Chovancová", room: "V311", changed: true, cancelled: false),
+        first: 0,
+        rows: [
+            LessonRow(period: "1", start: 480, end: 525, parts: [
+                WidgetLesson(period: "1", start: 480, end: 525, subject: "Aplikační software", abbrev: "ASW", detail: "ASW1 · P334 · Mgr. Václav Knápek", room: "P334", changed: false, cancelled: false),
+                WidgetLesson(period: "1", start: 480, end: 525, subject: "Aplikační software", abbrev: "ASW", detail: "ASW2 · P204 · Ing. Jana Vaculínová", room: "P204", changed: false, cancelled: false),
+            ]),
+            LessonRow(period: "2", start: 530, end: 575, parts: [
+                WidgetLesson(period: "2", start: 530, end: 575, subject: "Základy elektrotechniky", abbrev: "ZET", detail: "V311 · Ing. Evžen Žabčík", room: "V311", changed: true, cancelled: false),
+            ]),
         ]
     )
 }
@@ -247,35 +342,39 @@ struct TimetableWidgetView: View {
     private var small: Bool { family == .systemSmall }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            header
-            content
-            Spacer(minLength: 0)
-        }
-        .containerBackground(for: .widget) { palette.background }
-    }
-
-    private var header: some View {
-        HStack(spacing: 6) {
-            Text(dayTitle)
-                .font(.system(size: small ? 11 : 12, weight: .bold))
-                .foregroundStyle(palette.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-            Spacer(minLength: 0)
-            if let id = entry.classId, entry.page != nil {
-                arrow("chevron.left", step: -1, enabled: entry.canBack, classId: id)
-                arrow("chevron.right", step: 1, enabled: entry.canForward, classId: id)
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: Metrics.headerGap) {
+                Text(dayTitle)
+                    .font(.system(size: small ? 11 : 12, weight: .bold))
+                    .foregroundStyle(palette.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .frame(height: Metrics.headerHeight)
+                    .contentTransition(.opacity)
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .clipped()
+            }
+            if let id = entry.classId, entry.window != nil {
+                VStack(spacing: 0) {
+                    arrow("chevron.up", step: -Metrics.step, enabled: entry.canUp, classId: id)
+                    Spacer(minLength: 6)
+                    arrow("chevron.down", step: Metrics.step, enabled: entry.canDown, classId: id)
+                }
+                .frame(maxHeight: .infinity)
             }
         }
+        .padding(Metrics.padding)
+        .containerBackground(for: .widget) { palette.background }
+        .widgetURL(entry.classId.flatMap { URL(string: "schoolday://timetable/\($0)") })
     }
 
     private func arrow(_ symbol: String, step: Int, enabled: Bool, classId: String) -> some View {
         Button(intent: ShiftPageIntent(classId: classId, step: step)) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(palette.text)
-                .frame(width: 22, height: 22)
+                .frame(width: Metrics.arrowSize, height: Metrics.arrowSize)
                 .background(Circle().fill(palette.row))
         }
         .buttonStyle(.plain)
@@ -287,16 +386,22 @@ struct TimetableWidgetView: View {
     private var content: some View {
         if entry.classId == nil {
             message(W.chooseClass)
-        } else if let page = entry.page {
-            if page.lessons.isEmpty {
-                message(page.day.dayOff && !page.day.dayOffName.isEmpty ? page.day.dayOffName : W.noLessons)
-            } else {
-                VStack(spacing: 4) {
-                    ForEach(page.lessons, id: \.self) { lesson in
-                        if small { SmallRow(lesson: lesson, palette: palette) } else { MediumRow(lesson: lesson, palette: palette) }
+        } else if let window = entry.window {
+            Group {
+                if window.rows.isEmpty {
+                    message(window.day.dayOff && !window.day.dayOffName.isEmpty ? window.day.dayOffName : W.noLessons)
+                } else {
+                    VStack(spacing: Metrics.rowGap) {
+                        ForEach(window.rows, id: \.self) { row in
+                            if small { SmallRow(row: row, palette: palette) } else { MediumRow(row: row, palette: palette) }
+                        }
                     }
                 }
             }
+            // Each tap slides the rows in from the side it moves towards, with a little bounce.
+            .id(window.key)
+            .transition(.push(from: entry.direction < 0 ? .top : .bottom))
+            .animation(.spring(response: 0.45, dampingFraction: 0.74), value: window.key)
         } else {
             VStack(spacing: 4) {
                 message(W.cantLoad)
@@ -319,7 +424,7 @@ struct TimetableWidgetView: View {
             .multilineTextAlignment(.center)
     }
 
-    private var dayDate: Date? { entry.page.flatMap { WidgetDates.date(from: $0.day.date) } }
+    private var dayDate: Date? { entry.window.flatMap { WidgetDates.date(from: $0.day.date) } }
 
     private var dayLabel: String {
         guard let date = dayDate else { return entry.className ?? "Schoolday" }
@@ -338,7 +443,7 @@ struct TimetableWidgetView: View {
     private var dayTitle: String {
         var title = dayLabel
         if let short = shortDate { title += small ? " \(short)" : " (\(short))" }
-        if !small, let name = entry.className, entry.page != nil { title = "\(name) · " + title }
+        if !small, let name = entry.className, entry.window != nil { title = "\(name) · " + title }
         if entry.offline { title += " · " + W.offline }
         return title
     }
@@ -346,78 +451,86 @@ struct TimetableWidgetView: View {
 
 private func hm(_ minutes: Int) -> String { String(format: "%d:%02d", minutes / 60, minutes % 60) }
 
-/// Medium: period, start and end, subject, then group · room · teacher. Changed lessons get the pink bar.
+/// Medium: period, start and end, subject, then one "group · room · teacher" line per group.
+/// Changed lessons get the pink bar.
 private struct MediumRow: View {
-    let lesson: WidgetLesson
+    let row: LessonRow
     let palette: Palette
 
     var body: some View {
+        let shown = Array(row.parts.prefix(Metrics.maxGroupLines))
         HStack(spacing: 8) {
             Capsule()
-                .fill(lesson.changed ? palette.accent : Color.clear)
+                .fill(row.changed ? palette.accent : Color.clear)
                 .frame(width: 3)
                 .padding(.vertical, 4)
                 .widgetAccentable()
-            Text(lesson.period)
+            Text(row.period)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(lesson.changed ? palette.accent : palette.text)
+                .foregroundStyle(row.changed ? palette.accent : palette.text)
                 .frame(width: 14)
                 .widgetAccentable()
             VStack(alignment: .leading, spacing: 0) {
-                Text(hm(lesson.start))
-                Text(hm(lesson.end))
+                Text(hm(row.start))
+                Text(hm(row.end))
             }
             .font(.system(size: 11, weight: .medium).monospacedDigit())
-            .foregroundStyle(lesson.changed ? palette.accent : palette.secondary)
+            .foregroundStyle(row.changed ? palette.accent : palette.secondary)
             .widgetAccentable()
-            VStack(alignment: .leading, spacing: 1) {
-                Text(lesson.subject)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(row.subject)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(palette.text)
-                    .strikethrough(lesson.cancelled)
+                    .strikethrough(row.cancelled)
                     .lineLimit(1)
-                Text(lesson.detail)
-                    .font(.system(size: 11))
-                    .foregroundStyle(palette.secondary)
-                    .lineLimit(1)
+                ForEach(0 ..< shown.count, id: \.self) { i in
+                    let part = shown[i]
+                    Text(row.mixedSubjects && !part.abbrev.isEmpty ? "\(part.abbrev) · \(part.detail)" : part.detail)
+                        .font(.system(size: 11))
+                        .foregroundStyle(palette.secondary)
+                        .strikethrough(part.cancelled && !row.cancelled)
+                        .lineLimit(1)
+                        .frame(height: Metrics.extraLine)
+                }
             }
             Spacer(minLength: 0)
         }
         .padding(.trailing, 8)
-        .frame(height: 30)
+        .frame(height: Metrics.height(row, small: false))
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(lesson.changed ? palette.changedRow : palette.row)
+                .fill(row.changed ? palette.changedRow : palette.row)
         )
-        .opacity(lesson.cancelled ? 0.6 : 1)
+        .opacity(row.cancelled ? 0.6 : 1)
     }
 }
 
-/// Small: period and start time, short subject name and room on one line.
+/// Small: period and start time, short subject name and the rooms of all groups on one line.
 private struct SmallRow: View {
-    let lesson: WidgetLesson
+    let row: LessonRow
     let palette: Palette
 
     var body: some View {
         HStack(spacing: 6) {
             Capsule()
-                .fill(lesson.changed ? palette.accent : Color.clear)
+                .fill(row.changed ? palette.accent : Color.clear)
                 .frame(width: 3)
                 .padding(.vertical, 5)
                 .widgetAccentable()
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
-                    Text(lesson.period).font(.system(size: 11, weight: .bold))
-                    Text(hm(lesson.start)).font(.system(size: 11, weight: .medium).monospacedDigit())
+                    Text(row.period).font(.system(size: 11, weight: .bold))
+                    Text(hm(row.start)).font(.system(size: 11, weight: .medium).monospacedDigit())
                 }
-                .foregroundStyle(lesson.changed ? palette.accent : palette.secondary)
+                .foregroundStyle(row.changed ? palette.accent : palette.secondary)
                 .widgetAccentable()
                 HStack(spacing: 4) {
-                    Text(lesson.abbrev.isEmpty ? lesson.subject : lesson.abbrev)
+                    Text(row.abbrev)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(palette.text)
-                        .strikethrough(lesson.cancelled)
-                    Text(lesson.room)
+                        .strikethrough(row.cancelled)
+                        .layoutPriority(1)
+                    Text(row.rooms)
                         .font(.system(size: 11))
                         .foregroundStyle(palette.secondary)
                 }
@@ -425,12 +538,12 @@ private struct SmallRow: View {
             }
             Spacer(minLength: 0)
         }
-        .frame(height: 30)
+        .frame(height: Metrics.rowHeight)
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(lesson.changed ? palette.changedRow : palette.row)
+                .fill(row.changed ? palette.changedRow : palette.row)
         )
-        .opacity(lesson.cancelled ? 0.6 : 1)
+        .opacity(row.cancelled ? 0.6 : 1)
     }
 }
 
@@ -444,6 +557,8 @@ struct TimetableWidget: Widget {
         .configurationDisplayName("Timetable")
         .description(W.t("A class's lessons. Use the arrows to go through the week.", "Hodiny třídy. Šipkami projdeš celý týden."))
         .supportedFamilies([.systemSmall, .systemMedium])
+        // The widget sets its own, narrower margins.
+        .contentMarginsDisabled()
     }
 }
 

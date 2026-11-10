@@ -49,6 +49,9 @@ import kotlinx.coroutines.delay
 /** Notification tap: open the Lunch tab with today's details. */
 const val OPEN_LUNCH_TODAY = "lunch_today"
 
+/** Widget tap on iOS: open the Timetable tab on the class that follows this prefix. */
+const val OPEN_TIMETABLE = "timetable:"
+
 /** Back gesture on Android; nothing on iOS, where the glass back button is used. */
 @Composable
 expect fun SimpleBackHandler(enabled: Boolean, onBack: () -> Unit)
@@ -147,10 +150,16 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
     val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(openRequest.value) {
-        if (openRequest.value == OPEN_LUNCH_TODAY) {
+        val request = openRequest.value
+        if (request == OPEN_LUNCH_TODAY) {
             showSettings = false
             tab = Tab.Lunch
             lunchSheetDate = todayDate().toString()
+            openRequest.value = null
+        } else if (request != null && request.startsWith(OPEN_TIMETABLE)) {
+            showSettings = false
+            selectedClass = request.removePrefix(OPEN_TIMETABLE)
+            tab = Tab.Timetable
             openRequest.value = null
         }
     }

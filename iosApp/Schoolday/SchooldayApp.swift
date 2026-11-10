@@ -81,6 +81,7 @@ struct SchooldayApp: App {
         WindowGroup {
             RootView(model: model)
                 .preferredColorScheme(model.dark ? .dark : .light)
+                .onOpenURL { url in model.core.openLink(url: url.absoluteString) }
         }
         .onChange(of: phase) { newPhase in
             if newPhase == .active {

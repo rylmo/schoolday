@@ -9,6 +9,7 @@ import app.schoolday.ui.AppViewModel
 import app.schoolday.ui.IntroState
 import app.schoolday.ui.L
 import app.schoolday.ui.NativeChrome
+import app.schoolday.ui.OPEN_TIMETABLE
 import app.schoolday.ui.SchoolApp
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -85,6 +86,12 @@ class SchoolIos(secure: SecureStore) {
 
     fun makeViewController(): UIViewController = ComposeUIViewController {
         SchoolApp(vm, openRequest, intro, chrome)
+    }
+
+    /** schoolday://timetable/<class id> (from the widget) opens that class's timetable. */
+    fun openLink(url: String) {
+        val classId = url.substringAfter("schoolday://timetable/", "").substringBefore('?').trim('/')
+        if (classId.isNotEmpty()) openRequest.value = OPEN_TIMETABLE + classId
     }
 
     /** Called whenever the app comes to the foreground. */
