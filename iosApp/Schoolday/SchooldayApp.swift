@@ -40,6 +40,12 @@ final class AppModel: NSObject, ObservableObject, ChromeListener {
     @Published var titles = ["Today", "Timetable", "Lunch"]
     @Published var weekView = false
     @Published var permanent = false
+    /// The newer version on offer, shown as an alert; nil when there is none.
+    @Published var updateVersion: String?
+
+    func updateChanged(available: Bool, version: String) {
+        updateVersion = available ? version : nil
+    }
     /// Days until SideStore's signature runs out, once there are fewer than three.
     @Published var daysLeft: Int? = SigningExpiry.daysLeft()
 

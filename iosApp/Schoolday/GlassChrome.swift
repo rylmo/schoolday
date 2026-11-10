@@ -10,6 +10,14 @@ private let lunchOrange = UIColor(red: 0.949, green: 0.651, blue: 0.353, alpha: 
 struct RootView: View {
     @ObservedObject var model: AppModel
 
+    /// Not over the Settings sheet (it has its own Update button) or the launch animation.
+    private var updateShown: Binding<Bool> {
+        Binding(
+            get: { model.updateVersion != nil && !model.settingsOpen && model.barVisible },
+            set: { shown in if !shown { model.updateVersion = nil } }
+        )
+    }
+
     private var settingsShown: Binding<Bool> {
         Binding(
             get: { model.settingsOpen },
@@ -34,6 +42,13 @@ struct RootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        }
+        .alert(model.core.chrome.text.updateTitle, isPresented: updateShown, presenting: model.updateVersion) { _ in
+            Button(model.core.chrome.text.updateLater, role: .cancel) { model.core.chrome.dismissUpdate() }
+            Button(model.core.chrome.text.updateNow) { model.core.chrome.startUpdate() }
+                .keyboardShortcut(.defaultAction)
+        } message: { version in
+            Text("Schoolday \(version)\n\n\(model.core.chrome.text.updateViaSideStore)")
         }
         .sheet(isPresented: settingsShown) {
             SettingsView(model: model.settings) { model.core.chrome.back() }

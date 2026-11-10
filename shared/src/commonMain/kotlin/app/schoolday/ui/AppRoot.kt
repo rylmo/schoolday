@@ -68,8 +68,11 @@ class NativeChrome {
     internal var goBack: () -> Unit = {}
     internal var showSettings: () -> Unit = {}
     internal var timetable: TimetableActions? = null
+    internal var startUpdateAction: () -> Unit = {}
+    internal var dismissUpdateAction: () -> Unit = {}
     private var replay: ((ChromeListener) -> Unit)? = null
     private var replayTimetable: ((ChromeListener) -> Unit)? = null
+    private var replayUpdate: ((ChromeListener) -> Unit)? = null
 
     var listener: ChromeListener? = null
         set(value) {
@@ -77,6 +80,7 @@ class NativeChrome {
             if (value != null) {
                 replay?.invoke(value)
                 replayTimetable?.invoke(value)
+                replayUpdate?.invoke(value)
             }
         }
 
@@ -89,6 +93,8 @@ class NativeChrome {
     fun openSettings() = showSettings()
     fun toggleWeekView() { timetable?.toggleWeekView?.invoke() }
     fun togglePermanent() { timetable?.togglePermanent?.invoke() }
+    fun startUpdate() = startUpdateAction()
+    fun dismissUpdate() = dismissUpdateAction()
 
     internal fun publish(tab: Int, settingsOpen: Boolean, visible: Boolean, dark: Boolean, titles: List<String>) {
         val send: (ChromeListener) -> Unit = { it.changed(tab, settingsOpen, visible, dark, titles) }
@@ -101,6 +107,13 @@ class NativeChrome {
         replayTimetable = send
         listener?.let(send)
     }
+
+    /** A newer version to offer ([version] is its name), or none. */
+    internal fun publishUpdate(version: String?) {
+        val send: (ChromeListener) -> Unit = { it.updateChanged(version != null, version.orEmpty()) }
+        replayUpdate = send
+        listener?.let(send)
+    }
 }
 
 /** What the Timetable screen's native toolbar buttons do. */
@@ -110,6 +123,7 @@ class TimetableActions(val toggleWeekView: () -> Unit, val togglePermanent: () -
 interface ChromeListener {
     fun changed(tab: Int, settingsOpen: Boolean, visible: Boolean, dark: Boolean, titles: List<String>)
     fun timetableChanged(weekView: Boolean, permanent: Boolean)
+    fun updateChanged(available: Boolean, version: String)
 }
 
 /** Set on iOS, where toolbar buttons and Settings are native; screens then leave them out. */
@@ -127,10 +141,18 @@ fun SchoolApp(vm: AppViewModel, openRequest: MutableState<String?>, intro: Intro
                 if (!intro.finished) IntroOverlay(intro)
                 else {
                     val update by vm.update.collectAsState()
-                    UpdatePrompt(
-                        update, onUpdate = vm::startUpdate, onLater = vm::dismissUpdate, onAllow = vm::openInstallSettings,
-                        note = if (chrome != null) S.updateViaSideStore else S.updateCloses,
-                    )
+                    if (chrome == null) {
+                        UpdatePrompt(update, onUpdate = vm::startUpdate, onLater = vm::dismissUpdate, onAllow = vm::openInstallSettings)
+                    } else {
+                        // iOS shows a native (Liquid Glass) alert in the middle of the screen instead.
+                        DisposableEffect(chrome) {
+                            chrome.startUpdateAction = vm::startUpdate
+                            chrome.dismissUpdateAction = vm::dismissUpdate
+                            onDispose { chrome.startUpdateAction = {}; chrome.dismissUpdateAction = {} }
+                        }
+                        val version = (update as? UpdateUi.Available)?.info?.versionName
+                        LaunchedEffect(version) { chrome.publishUpdate(version) }
+                    }
                 }
             }
         }
@@ -190,14 +212,9 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
         }
         val titles = listOf(S.today, S.timetable, S.lunch)
         val dark = T.isDark
-        // The native tab bar and buttons sit above everything Compose draws, so they step aside
-        // while the update panel is up; its backdrop then covers the whole screen.
-        val update by vm.update.collectAsState()
-        val updateShown = update is UpdateUi.Available || update is UpdateUi.NeedsPermission ||
-            update is UpdateUi.Downloading || update is UpdateUi.Installing || update is UpdateUi.Failed
-        LaunchedEffect(tab, showSettings, intro.finished, updateShown, titles, dark) {
+        LaunchedEffect(tab, showSettings, intro.finished, titles, dark) {
             // Settings is a native sheet over the tab bar, so the bar stays.
-            chrome.publish(tab.ordinal, showSettings, intro.finished && !updateShown, dark, titles)
+            chrome.publish(tab.ordinal, showSettings, intro.finished, dark, titles)
         }
     }
 
