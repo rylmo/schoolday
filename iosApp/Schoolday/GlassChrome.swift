@@ -268,15 +268,15 @@ final class ChromeController: UIViewController, UITabBarControllerDelegate {
         embed(content)
         (view as? ChromeView)?.content = content.view
 
+        // The real labels from the start: labels added after the bar's first layout kept the
+        // widths of empty ones ("Timeta…", an off-centre "Lunch") until the bar was touched.
+        let text = core.chrome.text
+        let titles = [text.today, text.timetable, text.lunch]
         tabs.viewControllers = symbols.indices.map { index in
             let page = UIViewController()
             page.view.backgroundColor = .clear
             page.view.isUserInteractionEnabled = false
-            page.tabBarItem = UITabBarItem(
-                title: nil,
-                image: UIImage(systemName: symbols[index]),
-                selectedImage: UIImage(systemName: selectedSymbols[index])
-            )
+            page.tabBarItem = item(index, title: titles[index])
             return page
         }
         tabs.delegate = self
@@ -304,11 +304,26 @@ final class ChromeController: UIViewController, UITabBarControllerDelegate {
     override var childForStatusBarStyle: UIViewController? { content }
     override var childForHomeIndicatorAutoHidden: UIViewController? { content }
 
+    private func item(_ index: Int, title: String) -> UITabBarItem {
+        UITabBarItem(
+            title: title,
+            image: UIImage(systemName: symbols[index]),
+            selectedImage: UIImage(systemName: selectedSymbols[index])
+        )
+    }
+
     func apply(tab: Int, titles: [String], barVisible: Bool) {
         loadViewIfNeeded()
         let pages = tabs.viewControllers ?? []
+        var relabelled = false
         for (index, page) in pages.enumerated() where index < titles.count && page.tabBarItem.title != titles[index] {
-            page.tabBarItem.title = titles[index]
+            // A new item (not just a new title), so the bar measures the label again.
+            page.tabBarItem = item(index, title: titles[index])
+            relabelled = true
+        }
+        if relabelled {
+            tabs.tabBar.setNeedsLayout()
+            tabs.tabBar.layoutIfNeeded()
         }
         // Follow the shared app only when it actually moved, so a tap is not undone by an update
         // that was already on its way.
