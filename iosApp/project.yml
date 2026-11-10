@@ -15,6 +15,9 @@ targets:
     platform: iOS
     sources:
       - Schoolday
+    dependencies:
+      # The home screen widget, embedded in the app as Schoolday.app/PlugIns.
+      - target: SchooldayWidget
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.schoolday.ios
@@ -44,3 +47,27 @@ targets:
         script: |
           cd "$SRCROOT/.."
           ./gradlew :shared:embedAndSignAppleFrameworkForXcode --console=plain
+  SchooldayWidget:
+    type: app-extension
+    platform: iOS
+    # Configurable, interactive widgets need iOS 17; the app itself still runs on 16.
+    deploymentTarget: "17.0"
+    sources:
+      - SchooldayWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.schoolday.ios.widget
+        TARGETED_DEVICE_FAMILY: "1"
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        ENABLE_BITCODE: NO
+        SKIP_INSTALL: YES
+    info:
+      path: SchooldayWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Schoolday
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
