@@ -23,6 +23,8 @@ import kotlinx.coroutines.delay
 import kotlinx.datetime.LocalDate
 
 private const val CLASS_LIST_REFRESH_DELAY_MS = 8_000L
+private const val LOAD_RETRIES = 2
+private const val LOAD_RETRY_DELAY_MS = 2_500L
 
 data class UiState<T>(val data: T? = null, val loading: Boolean = false, val error: String? = null)
 data class TtKey(val classId: String, val mode: TimetableMode)
@@ -94,7 +96,14 @@ class AppViewModel(private val platform: Platform, private val repo: Repository)
         if (current?.loading == true) return
         put(key, (current ?: UiState(repo.cachedTimetable(classId, mode))).copy(loading = true, error = null))
         viewModelScope.launch {
-            val r = repo.timetable(classId, mode, force)
+            var r = repo.timetable(classId, mode, force)
+            // A launch-time request can fail before the phone's network is up; with nothing
+            // cached that would leave the class empty until the next manual refresh.
+            var retries = 0
+            while (r.data == null && r.error != null && retries++ < LOAD_RETRIES) {
+                delay(LOAD_RETRY_DELAY_MS)
+                r = repo.timetable(classId, mode, force)
+            }
             put(key, UiState(r.data, loading = false, error = r.error))
             if (classId == settings.value.myClass && mode == TimetableMode.Actual) platform.rescheduleLunch()
         }

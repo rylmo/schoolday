@@ -1,36 +1,29 @@
 import Shared
 import SwiftUI
+import UIKit
 
-private let lunchOrange = Color(red: 0.949, green: 0.651, blue: 0.353)
+private let lunchOrange = UIColor(red: 0.949, green: 0.651, blue: 0.353, alpha: 1)
 
-/// The shared Compose screens with native Liquid Glass controls floating above them.
+/// The shared Compose screens with native controls above them: the system tab bar (Liquid Glass
+/// on iOS 26, including its selection lens) and a glass back button for Settings.
 struct RootView: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
         ZStack {
-            ComposeHost(core: model.core).ignoresSafeArea()
-            VStack(spacing: 0) {
-                if model.settingsOpen {
+            ChromeHost(core: model.core, tab: model.tab, titles: model.titles, barVisible: model.barVisible)
+                .ignoresSafeArea()
+            if model.settingsOpen {
+                VStack(spacing: 0) {
                     HStack {
                         GlassBackButton { model.core.chrome.back() }
                         Spacer()
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 6)
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
-                if model.barVisible {
-                    GlassTabBar(
-                        selected: model.tab,
-                        titles: model.titles,
-                        onSelect: { model.core.chrome.select(tab: Int32($0)) }
-                    )
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 4)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
         }
     }
@@ -63,118 +56,145 @@ private struct GlassCircle: ViewModifier {
     }
 }
 
-private struct GlassBar: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.glassEffect(.regular.interactive(), in: Capsule())
-        } else {
-            content.background(.ultraThinMaterial, in: Capsule())
-        }
-    }
-}
-
-/// The bubble behind the selected tab. It turns clearer while it's being dragged, like a lens.
-private struct GlassSelector: View {
-    let lifted: Bool
-
-    var body: some View {
-        if #available(iOS 26.0, *) {
-            Color.clear.glassEffect(
-                (lifted ? Glass.clear : Glass.regular).tint(lunchOrange.opacity(lifted ? 0.14 : 0.3)),
-                in: Capsule()
-            )
-        } else {
-            Capsule().fill(lunchOrange.opacity(0.16))
-        }
-    }
-}
-
-struct GlassTabBar: View {
-    let selected: Int
+struct ChromeHost: UIViewControllerRepresentable {
+    let core: SchoolIos
+    let tab: Int
     let titles: [String]
-    let onSelect: (Int) -> Void
+    let barVisible: Bool
 
-    /// Set the moment a tab is chosen, so the bubble moves before the shared screens respond.
-    @State private var chosen: Int?
-    @State private var dragX: CGFloat?
+    func makeUIViewController(context: Context) -> ChromeController { ChromeController(core: core) }
+
+    func updateUIViewController(_ controller: ChromeController, context: Context) {
+        controller.apply(tab: tab, titles: titles, barVisible: barVisible)
+    }
+}
+
+/// Sends touches to the tab bar when they land on it and to the Compose screens otherwise.
+/// The tab bar controller covers the whole screen, so without this it would swallow every touch.
+final class ChromeView: UIView {
+    weak var content: UIView?
+    weak var tabs: UITabBarController?
+    var barActive = false
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if barActive, let tabs,
+           let hit = tabs.view.hitTest(convert(point, to: tabs.view), with: event),
+           isBarPart(hit, of: tabs) {
+            return hit
+        }
+        guard let content else { return nil }
+        return content.hitTest(convert(point, to: content), with: event)
+    }
+
+    /// Anything the controller hit-tests that is not its empty page (or a container around it) is the bar.
+    private func isBarPart(_ hit: UIView, of tabs: UITabBarController) -> Bool {
+        if hit === tabs.view || hit === tabs.tabBar { return false }
+        if let page = tabs.selectedViewController?.viewIfLoaded,
+           page.isDescendant(of: hit) || hit.isDescendant(of: page) {
+            return false
+        }
+        return true
+    }
+}
+
+/// Hosts the Compose screens with a real UITabBarController floating over them. Its pages are
+/// empty and see-through; it is there only for the system tab bar, which iOS 26 draws as
+/// Liquid Glass with the draggable selection lens. A hand-built bar cannot get that lens:
+/// glass placed inside glass renders as a flat tint.
+final class ChromeController: UIViewController, UITabBarControllerDelegate {
+    private let core: SchoolIos
+    private let content: UIViewController
+    private let tabs = UITabBarController()
+    private var shown = false
+    private var modelTab = 0
 
     private let symbols = ["sun.max", "calendar", "fork.knife"]
     private let selectedSymbols = ["sun.max.fill", "calendar", "fork.knife"]
-    private let barHeight: CGFloat = 52
 
-    private var active: Int { chosen ?? selected }
+    init(core: SchoolIos) {
+        self.core = core
+        content = core.makeViewController()
+        super.init(nibName: nil, bundle: nil)
+    }
 
-    var body: some View {
-        GeometryReader { geometry in
-            let slot = geometry.size.width / CGFloat(symbols.count)
-            ZStack(alignment: .leading) {
-                selector(slot: slot)
-                HStack(spacing: 0) {
-                    ForEach(0 ..< symbols.count, id: \.self) { index in
-                        tabButton(index)
-                    }
-                }
-            }
-            .simultaneousGesture(dragGesture(slot: slot))
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func loadView() {
+        let root = ChromeView()
+        root.tabs = tabs
+        view = root
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        embed(content)
+        (view as? ChromeView)?.content = content.view
+
+        tabs.viewControllers = symbols.indices.map { index in
+            let page = UIViewController()
+            page.view.backgroundColor = .clear
+            page.view.isUserInteractionEnabled = false
+            page.tabBarItem = UITabBarItem(
+                title: nil,
+                image: UIImage(systemName: symbols[index]),
+                selectedImage: UIImage(systemName: selectedSymbols[index])
+            )
+            return page
         }
-        .frame(height: barHeight)
-        .padding(5)
-        .modifier(GlassBar())
-        .onChange(of: selected) { newValue in
-            chosen = newValue
+        tabs.delegate = self
+        tabs.view.backgroundColor = .clear
+        tabs.tabBar.tintColor = lunchOrange
+        if #unavailable(iOS 26.0) {
+            // Before Liquid Glass a bar over non-scrolling content is fully transparent by default.
+            let appearance = UITabBarAppearance()
+            appearance.configureWithDefaultBackground()
+            tabs.tabBar.standardAppearance = appearance
+            tabs.tabBar.scrollEdgeAppearance = appearance
+        }
+        embed(tabs)
+        tabs.view.alpha = 0
+    }
+
+    private func embed(_ child: UIViewController) {
+        addChild(child)
+        child.view.frame = view.bounds
+        child.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(child.view)
+        child.didMove(toParent: self)
+    }
+
+    override var childForStatusBarStyle: UIViewController? { content }
+    override var childForHomeIndicatorAutoHidden: UIViewController? { content }
+
+    func apply(tab: Int, titles: [String], barVisible: Bool) {
+        loadViewIfNeeded()
+        let pages = tabs.viewControllers ?? []
+        for (index, page) in pages.enumerated() where index < titles.count && page.tabBarItem.title != titles[index] {
+            page.tabBarItem.title = titles[index]
+        }
+        // Follow the shared app only when it actually moved, so a tap is not undone by an update
+        // that was already on its way.
+        if tab != modelTab {
+            modelTab = tab
+            if tab < pages.count, tabs.selectedIndex != tab { tabs.selectedIndex = tab }
+        }
+        guard barVisible != shown else { return }
+        shown = barVisible
+        (view as? ChromeView)?.barActive = barVisible
+        UIView.animate(
+            withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0,
+            options: [.beginFromCurrentState, .allowUserInteraction]
+        ) {
+            self.tabs.view.alpha = barVisible ? 1 : 0
+            self.tabs.view.transform = barVisible ? .identity : CGAffineTransform(translationX: 0, y: 30)
         }
     }
 
-    private func selector(slot: CGFloat) -> some View {
-        let lifted = dragX != nil
-        let lastX = slot * CGFloat(symbols.count - 1)
-        let x = dragX.map { min(max($0 - slot / 2, 0), lastX) } ?? slot * CGFloat(active)
-        return GlassSelector(lifted: lifted)
-            .frame(width: slot, height: barHeight)
-            .scaleEffect(lifted ? 1.1 : 1)
-            .offset(x: x)
-            .animation(lifted ? Animation.interactiveSpring(response: 0.2, dampingFraction: 0.86) : Animation.spring(response: 0.4, dampingFraction: 0.7), value: x)
-            .animation(.spring(response: 0.3, dampingFraction: 0.65), value: lifted)
-            .allowsHitTesting(false)
-    }
-
-    private func tabButton(_ index: Int) -> some View {
-        let isActive = active == index
-        return Button {
-            choose(index)
-        } label: {
-            VStack(spacing: 2) {
-                Image(systemName: isActive ? selectedSymbols[index] : symbols[index])
-                    .font(.system(size: 19, weight: .medium))
-                    .symbolRenderingMode(.monochrome)
-                Text(index < titles.count ? titles[index] : "")
-                    .font(.system(size: 11, weight: isActive ? .semibold : .medium))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(isActive ? lunchOrange : Color.primary)
-            .frame(maxWidth: .infinity, minHeight: barHeight)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isActive ? .isSelected : [])
-    }
-
-    private func dragGesture(slot: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .local)
-            .onChanged { value in
-                dragX = value.location.x
-            }
-            .onEnded { value in
-                let index = min(max(Int(value.location.x / slot), 0), symbols.count - 1)
-                dragX = nil
-                choose(index)
-            }
-    }
-
-    private func choose(_ index: Int) {
-        guard index != active else { return }
-        UISelectionFeedbackGenerator().selectionChanged()
-        chosen = index
-        onSelect(index)
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        let index = tabBarController.selectedIndex
+        guard index != modelTab else { return }
+        modelTab = index
+        core.chrome.select(tab: Int32(index))
     }
 }

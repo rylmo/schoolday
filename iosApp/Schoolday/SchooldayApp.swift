@@ -54,12 +54,6 @@ final class AppModel: NSObject, ObservableObject, ChromeListener {
     }
 }
 
-struct ComposeHost: UIViewControllerRepresentable {
-    let core: SchoolIos
-    func makeUIViewController(context: Context) -> UIViewController { core.makeViewController() }
-    func updateUIViewController(_ controller: UIViewController, context: Context) {}
-}
-
 @main
 struct SchooldayApp: App {
     @StateObject private var model = AppModel()

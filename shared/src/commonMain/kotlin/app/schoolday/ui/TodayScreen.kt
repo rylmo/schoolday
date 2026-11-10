@@ -101,6 +101,10 @@ fun TodayScreen(
 
     // next week's timetable, for "Monday's lunch" times on Fridays and weekends
     LaunchedEffect(settings.myClass) { vm.loadTimetable(settings.myClass, TimetableMode.Next) }
+    // Today loads its own classes instead of relying on the host app's launch/foreground refresh.
+    LaunchedEffect(settings.myClass, settings.shownClasses) {
+        (settings.shownClasses + settings.myClass).distinct().forEach { vm.loadTimetable(it, TimetableMode.Actual) }
+    }
 
     // Strips draw in left → right, unless the startup animation already morphed into them.
     val draw = remember { Animatable(if (intro?.willPlay == true) 1f else 0f) }
@@ -145,7 +149,8 @@ fun TodayScreen(
                         name = name, isYou = i == 0, label = if (i == 0) vm.className(id) else null,
                         st = st, myDay = if (i == 0) null else myDay, today = today, now = now, nowFrac = nowFrac,
                         progress = draw.value, onClick = { onOpenClass(id) },
-                        onStrip = { r, segs -> if (i < 3) { intro?.strips?.set(i, r); intro?.segs?.set(i, segs) } },
+                        onStrip = { r -> if (i < 3) intro?.strips?.set(i, r) },
+                        onSegs = { segs -> if (i < 3) intro?.segs?.set(i, segs) },
                     )
                     Hairline()
                 }
@@ -256,7 +261,8 @@ private fun ClassRow(
     nowFrac: Float?,
     progress: Float,
     onClick: () -> Unit,
-    onStrip: (androidx.compose.ui.geometry.Rect, List<StripSeg>) -> Unit,
+    onStrip: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onSegs: (List<StripSeg>) -> Unit,
 ) {
     val day = st?.data?.day(today)
     val hasSchool = day != null && !day.dayOff && day.realSlots().isNotEmpty()
@@ -268,9 +274,12 @@ private fun ClassRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(name, style = Type.bodyStrong, color = if (isYou) T.text2 else T.text, modifier = Modifier.width(NAME_W))
             val segs = remember(day, lunchGap) { if (hasSchool) stripSegs(day!!, lunchGap) else emptyList() }
+            // Reported apart from the strip's position: the position callback doesn't run again when a
+            // timetable arrives after layout, which left the launch animation without pills to land on.
+            LaunchedEffect(segs) { onSegs(segs) }
             DayStrip(
                 if (hasSchool) day else null, lunchGap, lunchMatch, progress, nowFrac,
-                Modifier.weight(1f).height(14.dp).onGloballyPositioned { onStrip(it.boundsInRoot(), segs) },
+                Modifier.weight(1f).height(14.dp).onGloballyPositioned { onStrip(it.boundsInRoot()) },
             )
         }
         Row(Modifier.padding(start = NAME_W), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
