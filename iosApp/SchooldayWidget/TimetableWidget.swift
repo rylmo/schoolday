@@ -312,24 +312,33 @@ struct TimetableProvider: AppIntentTimelineProvider {
         let todayKey = WidgetDates.key(now)
         let startOfDay = Calendar.current.startOfDay(for: now)
         let ends = Set(days.first { $0.date == todayKey }?.lessons.map(\.end) ?? [])
-        let times = [now] + ends.sorted()
+        var moments = ends.sorted()
             .map { startOfDay.addingTimeInterval(TimeInterval($0 * 60)) }
             .filter { $0 > now }
-            .prefix(10)
 
+        // A scrolled position holds for a while after the last tap, then the widget goes back to
+        // the current lesson at exactly that moment (an entry is planned for it).
         let offset = WidgetCache.offset(cls.id, now: now)
+        let resetAt = offset != 0 ? WidgetCache.offsetExpiry(cls.id) : nil
+        if let resetAt, resetAt > now { moments.append(resetAt) }
+        let times = [now] + moments.sorted().prefix(10)
+
         let direction = WidgetCache.recentTap(now: now) ?? 1
         return times.map { time in
+            let held = resetAt.map { time < $0 } ?? false
+            let applied = held ? offset : 0
             let built = Windows.build(days, now: time, budget: budget, small: small)
-            let index = min(max(built.auto + offset, 0), max(built.windows.count - 1, 0))
-            if time == now, index - built.auto != offset {
-                WidgetCache.setOffset(cls.id, index - built.auto) // taps past either end don't pile up
+            let index = min(max(built.auto + applied, 0), max(built.windows.count - 1, 0))
+            if time == now, held, index - built.auto != applied {
+                WidgetCache.clampOffset(cls.id, index - built.auto) // taps past either end don't pile up
             }
+            // Going back to the current lesson slides the opposite way to the scrolling.
+            let slide = time == now ? direction : (time == resetAt ? (offset > 0 ? -1 : 1) : 1)
             return TimetableEntry(
                 date: time, classId: cls.id, className: cls.name,
                 window: built.windows.isEmpty ? nil : built.windows[index],
                 canUp: index > 0, canDown: index < built.windows.count - 1,
-                direction: time == now ? direction : 1, offline: offline,
+                direction: slide, offline: offline,
                 rowsHeight: budget
             )
         }

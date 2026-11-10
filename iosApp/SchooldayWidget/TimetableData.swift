@@ -252,14 +252,28 @@ enum WidgetCache {
     }
 
     /// Days the user flipped to with the arrows. It falls back to automatic after a while.
+    /// How long a scrolled position stays before the widget goes back to the current lesson.
+    static let manualHold: TimeInterval = 20 * 60
+
     static func offset(_ classId: String, now: Date = Date()) -> Int {
         guard let set = defaults.object(forKey: "offsetAt.\(classId)") as? Date,
-              now.timeIntervalSince(set) < 20 * 60 else { return 0 }
+              now.timeIntervalSince(set) < manualHold else { return 0 }
         return defaults.integer(forKey: "offset.\(classId)")
     }
 
+    /// When the current scrolled position expires (manualHold after the last tap).
+    static func offsetExpiry(_ classId: String) -> Date? {
+        (defaults.object(forKey: "offsetAt.\(classId)") as? Date)?.addingTimeInterval(manualHold)
+    }
+
+    /// A tap: the new position, and the hold starts again.
     static func setOffset(_ classId: String, _ value: Int) {
         defaults.set(value, forKey: "offset.\(classId)")
         defaults.set(Date(), forKey: "offsetAt.\(classId)")
+    }
+
+    /// Pulls a position back inside the week without restarting the hold.
+    static func clampOffset(_ classId: String, _ value: Int) {
+        defaults.set(value, forKey: "offset.\(classId)")
     }
 }
