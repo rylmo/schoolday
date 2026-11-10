@@ -139,11 +139,16 @@ enum Bakalari {
         }
     }
 
-    /// "Zrušeno (ZET, Žabčík Evžen)" → "ZET"
+    /// "Zrušeno (ZET, Žabčík Evžen)" → "ZET"; "Přesun na 11.11., 8:00: ZSV, Vejmelková Dana, V311" → "ZSV"
     private static func cancelledName(_ info: String) -> String {
-        guard let open = info.firstIndex(of: "(") else { return info }
-        let inside = info[info.index(after: open)...]
-        return String(inside.prefix { $0 != "," && $0 != ")" })
+        if let open = info.firstIndex(of: "(") {
+            let inside = info[info.index(after: open)...]
+            return String(inside.prefix { $0 != "," && $0 != ")" })
+        }
+        if let colon = info.range(of: ": ", options: .backwards) {
+            return String(info[colon.upperBound...].prefix { $0 != "," }).trimmingCharacters(in: .whitespaces)
+        }
+        return info
     }
 
     /// "10.11." → 2026-11-10, choosing the year that puts it nearest to today.
