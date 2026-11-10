@@ -5,6 +5,7 @@ import app.schoolday.data.SchoolClass
 import app.schoolday.ui.AppViewModel
 import app.schoolday.ui.S
 import app.schoolday.ui.Strings
+import app.schoolday.ui.UpdateUi
 import app.schoolday.ui.theme.AppTheme
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.combine
@@ -27,6 +28,9 @@ class SettingsSnapshot(
     val language: String,
     val languages: List<SettingsOption>,
     val version: String,
+    /** "Checking…", "You're on the latest version", "Version 1.2 (58) is available", or the error. */
+    val updateStatus: String,
+    val updateAvailable: Boolean,
 )
 
 /** Implemented by the SwiftUI Settings screen. */
@@ -46,7 +50,7 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
 
     fun watch(listener: SettingsListener) {
         scope.launch {
-            combine(vm.settings, vm.classes) { _, classes -> snapshot(classes) }.collect { listener.changed(it) }
+            combine(vm.settings, vm.classes, vm.update) { _, classes, _ -> snapshot(classes) }.collect { listener.changed(it) }
         }
     }
 
@@ -77,6 +81,14 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
                 SettingsOption("en", "English"),
             ),
             version = vm.versionName,
+            updateStatus = when (val u = vm.update.value) {
+                UpdateUi.Checking -> S.checkingUpdates
+                UpdateUi.UpToDate -> S.upToDate
+                is UpdateUi.Available -> S.updateReady(u.info.versionName)
+                is UpdateUi.Failed -> u.message
+                else -> S.versionLabel(vm.versionName)
+            },
+            updateAvailable = vm.update.value is UpdateUi.Available,
         )
     }
 
@@ -93,6 +105,11 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
     }
 
     fun logOut() = vm.logoutICanteen()
+
+    fun checkForUpdates() = vm.checkForUpdate(manual = true)
+
+    /** Hands the new build to SideStore. */
+    fun installUpdate() = vm.startUpdate()
 
     fun debugInfo(): String = vm.debugInfo()
 }

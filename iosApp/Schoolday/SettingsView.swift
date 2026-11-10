@@ -65,6 +65,23 @@ struct SettingsView: View {
             classesSection(snap)
             appSection(snap)
             Section {
+                HStack(spacing: 12) {
+                    Button { bridge.checkForUpdates() } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(text.checkUpdates).foregroundStyle(.primary)
+                            Text(snap.updateStatus)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    // Two buttons in one row: each needs its own style, or a tap fires both.
+                    .buttonStyle(.borderless)
+                    if snap.updateAvailable {
+                        Button(text.updateNow) { bridge.installUpdate() }
+                            .modifier(GlassButton(prominent: true))
+                    }
+                }
                 Button {
                     UIPasteboard.general.string = bridge.debugInfo()
                     copied = true

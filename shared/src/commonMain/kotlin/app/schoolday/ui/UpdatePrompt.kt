@@ -37,7 +37,7 @@ import app.schoolday.ui.theme.Type
 
 /** The "update available" panel. Shown above everything once the startup animation is done. */
 @Composable
-fun UpdatePrompt(state: UpdateUi, onUpdate: () -> Unit, onLater: () -> Unit, onAllow: () -> Unit) {
+fun UpdatePrompt(state: UpdateUi, onUpdate: () -> Unit, onLater: () -> Unit, onAllow: () -> Unit, note: String = S.updateCloses) {
     val visible = state is UpdateUi.Available || state is UpdateUi.NeedsPermission ||
         state is UpdateUi.Downloading || state is UpdateUi.Installing || state is UpdateUi.Failed
     val canDismiss = state !is UpdateUi.Downloading && state !is UpdateUi.Installing
@@ -71,7 +71,7 @@ fun UpdatePrompt(state: UpdateUi, onUpdate: () -> Unit, onLater: () -> Unit, onA
                 Eyebrow(S.updateTitle, color = T.accent)
                 Text(if (version != null) "Schoolday $version" else "Schoolday", style = Type.title, color = T.text)
                 when (state) {
-                    is UpdateUi.Available -> Text(S.updateCloses, style = Type.body, color = T.text2)
+                    is UpdateUi.Available -> Text(note, style = Type.body, color = T.text2)
                     is UpdateUi.NeedsPermission -> Text(S.updateAllow, style = Type.body, color = T.text2)
                     is UpdateUi.Failed -> Text(state.message, style = Type.body, color = T.removed)
                     is UpdateUi.Downloading -> ProgressLine(state.progress)

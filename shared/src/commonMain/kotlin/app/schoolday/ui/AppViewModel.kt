@@ -247,6 +247,8 @@ class AppViewModel(private val platform: Platform, private val repo: Repository)
                 val apk = updater.download(info) { p -> _update.value = UpdateUi.Downloading(info, p) }
                 _update.value = UpdateUi.Installing(info)
                 updater.install(apk)
+                // iOS: SideStore takes it from here, and this app stays open behind it.
+                if (updater.handsOff) _update.value = UpdateUi.Idle
             } catch (e: Exception) {
                 _update.value = UpdateUi.Failed(info, e.friendly())
             }

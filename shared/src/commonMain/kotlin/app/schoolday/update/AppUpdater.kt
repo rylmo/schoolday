@@ -26,4 +26,7 @@ interface AppUpdater {
     /** Downloads and verifies the update; returns the local file's path. */
     suspend fun download(info: UpdateInfo, onProgress: (Float) -> Unit): String
     suspend fun install(path: String)
+
+    /** True when [install] only hands the update to another app (SideStore on iOS) and this app keeps running. */
+    val handsOff: Boolean get() = false
 }

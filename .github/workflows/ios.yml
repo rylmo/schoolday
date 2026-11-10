@@ -50,6 +50,7 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath build \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
 
       - name: Package IPA
@@ -59,6 +60,12 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/Schoolday.app Payload/
           zip -qry Schoolday-iOS.ipa Payload
           ls -la Schoolday-iOS.ipa
+          # The app compares versionCode with its own build number to offer updates.
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Payload/Schoolday.app/Info.plist)
+          SHA=$(shasum -a 256 Schoolday-iOS.ipa | cut -d' ' -f1)
+          printf '{"versionCode":%s,"versionName":"%s (%s)","url":"https://github.com/%s/releases/download/ios-test/Schoolday-iOS.ipa","sha256":"%s"}\n' \
+            "${{ github.run_number }}" "$VERSION" "${{ github.run_number }}" "$GITHUB_REPOSITORY" "$SHA" > ios-update.json
+          cat ios-update.json
 
       - name: Publish test build
         working-directory: iosApp
@@ -66,7 +73,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete ios-test --yes --cleanup-tag || true
-          gh release create ios-test Schoolday-iOS.ipa \
+          gh release create ios-test Schoolday-iOS.ipa ios-update.json \
             --prerelease --latest=false --target "$GITHUB_SHA" \
             --title "Schoolday for iPhone (experimental)" \
             --notes "Unsigned test build for SideStore. Built from $GITHUB_SHA."

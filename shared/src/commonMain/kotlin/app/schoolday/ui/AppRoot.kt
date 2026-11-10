@@ -127,7 +127,10 @@ fun SchoolApp(vm: AppViewModel, openRequest: MutableState<String?>, intro: Intro
                 if (!intro.finished) IntroOverlay(intro)
                 else {
                     val update by vm.update.collectAsState()
-                    UpdatePrompt(update, onUpdate = vm::startUpdate, onLater = vm::dismissUpdate, onAllow = vm::openInstallSettings)
+                    UpdatePrompt(
+                        update, onUpdate = vm::startUpdate, onLater = vm::dismissUpdate, onAllow = vm::openInstallSettings,
+                        note = if (chrome != null) S.updateViaSideStore else S.updateCloses,
+                    )
                 }
             }
         }

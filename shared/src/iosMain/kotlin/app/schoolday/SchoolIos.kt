@@ -11,6 +11,8 @@ import app.schoolday.ui.L
 import app.schoolday.ui.NativeChrome
 import app.schoolday.ui.OPEN_TIMETABLE
 import app.schoolday.ui.SchoolApp
+import app.schoolday.update.AppUpdater
+import app.schoolday.update.IosUpdater
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSApplicationSupportDirectory
@@ -37,7 +39,12 @@ private class IosPlatform(override val secureStore: SecureStore) : Platform {
     }
 
     override val versionName: String
-        get() = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "?"
+        get() = "${NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "?"} ($buildNumber)"
+
+    private val buildNumber: Int
+        get() = (NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String)?.toIntOrNull() ?: 0
+
+    override val updater: AppUpdater = IosUpdater { buildNumber }
 
     override val deviceInfo: String
         get() = "${UIDevice.currentDevice.systemName} ${UIDevice.currentDevice.systemVersion}, ${UIDevice.currentDevice.model}"
@@ -82,6 +89,8 @@ class SchoolIos(secure: SecureStore) {
         intro = IntroState(willPlay = prefs.value.onboarded && platform.introBlocker() == null)
         // SwiftUI doesn't reliably report "became active" for the launch itself, and Today has no load of its own.
         vm.refreshAll()
+        // Quietly, once per launch: a newer test build offers itself through SideStore.
+        vm.checkForUpdate()
     }
 
     fun makeViewController(): UIViewController = ComposeUIViewController {
