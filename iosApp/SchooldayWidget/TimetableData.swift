@@ -102,8 +102,10 @@ enum Bakalari {
     static func parse(_ html: String, today: Date = Date()) throws -> [WidgetDay] {
         let marker = "const timetableData = "
         guard let start = html.range(of: marker) else { throw URLError(.cannotParseResponse) }
-        let lineEnd = html[start.upperBound...].firstIndex(of: "\n") ?? html.endIndex
-        var json = html[start.upperBound ..< lineEnd].trimmingCharacters(in: .whitespaces)
+        // The page ends lines with "\r\n", which Swift counts as one Character, so look for any
+        // newline rather than "\n" itself.
+        let lineEnd = html[start.upperBound...].firstIndex { $0.isNewline } ?? html.endIndex
+        var json = html[start.upperBound ..< lineEnd].trimmingCharacters(in: .whitespacesAndNewlines)
         if json.hasSuffix(";") { json.removeLast() }
         let root = try JSONDecoder().decode(Root.self, from: Data(json.utf8))
 
@@ -189,6 +191,12 @@ enum WidgetCache {
 
     static func save(_ classId: String, _ days: [WidgetDay]) {
         if let data = try? JSONEncoder().encode(days) { defaults.set(data, forKey: "tt.\(classId)") }
+    }
+
+    /// Why the last fetch failed, shown under "Can't load the timetable".
+    static var lastError: String? {
+        get { defaults.string(forKey: "lastError") }
+        set { defaults.set(newValue, forKey: "lastError") }
     }
 
     /// Days the user flipped to with the arrows. It falls back to automatic after a while.

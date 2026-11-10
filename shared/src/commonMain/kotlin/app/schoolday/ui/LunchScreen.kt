@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -68,17 +69,20 @@ fun LunchScreen(vm: AppViewModel, sheetDate: String?, onSheetDate: (String?) -> 
     LaunchedEffect(Unit) { vm.refreshLunch() }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 22.dp, bottom = 12.dp), verticalAlignment = Alignment.Bottom) {
-            Text(S.lunchTitle, style = Type.display, color = T.text, modifier = Modifier.weight(1f))
-            if (menu != null) {
-                Row(Modifier.padding(bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(if (menu.source == LunchSource.ICanteen) T.good else T.text3))
-                    Text(if (menu.source == LunchSource.ICanteen) "iCanteen" else S.schoolWebsite, style = Type.small, color = T.text3)
+        val chrome = LocalNativeChrome.current
+        Box(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 22.dp, bottom = 12.dp), verticalAlignment = Alignment.Bottom) {
+                Text(S.lunchTitle, style = Type.display, color = T.text, modifier = Modifier.weight(1f))
+                if (chrome == null) {
+                    if (menu != null) SourceLabel(menu, Modifier.padding(bottom = 12.dp, end = 4.dp))
+                    IconBtn(Ic.External, S.openICanteen, { uri.openUri(ICanteenClient.LOGIN_PAGE) })
                 }
             }
-            // iOS shows a floating Liquid Glass button here instead.
-            if (LocalNativeChrome.current == null) IconBtn(Ic.External, S.openICanteen, { uri.openUri(ICanteenClient.LOGIN_PAGE) })
-            else Spacer(Modifier.size(52.dp))
+            // iOS: the iCanteen button floats natively (6 below the status bar, 44 tall, 16 from the
+            // edge), so the label sits on the same centre line beside it.
+            if (chrome != null && menu != null) {
+                SourceLabel(menu, Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 70.dp).height(44.dp))
+            }
         }
 
         AnimatedVisibility(menu?.source == LunchSource.Website) {
@@ -124,6 +128,15 @@ fun LunchScreen(vm: AppViewModel, sheetDate: String?, onSheetDate: (String?) -> 
         ModalBottomSheet(onDismissRequest = { onSheetDate(null) }, containerColor = T.raised, contentColor = T.text, dragHandle = {
             Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 36.dp, height = 4.dp).clip(CircleShape).background(T.lineStrong))
         }) { TodayLunchDetail(menu, day) }
+    }
+}
+
+/** Where the menu came from: a green dot for iCanteen, grey for the school website. */
+@Composable
+private fun SourceLabel(menu: LunchMenu, modifier: Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(if (menu.source == LunchSource.ICanteen) T.good else T.text3))
+        Text(if (menu.source == LunchSource.ICanteen) "iCanteen" else S.schoolWebsite, style = Type.small, color = T.text3)
     }
 }
 

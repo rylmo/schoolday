@@ -110,6 +110,13 @@ struct SettingsView: View {
                 SecureField(text.password, text: $password)
                     .textContentType(.password)
                     .onSubmit(logIn)
+            } header: {
+                Text(text.iCanteen)
+            }
+            .onAppear { if user.isEmpty { user = snap.icUser } }
+            // The button gets a section of its own: as a see-through row inside the fields' card it
+            // cut the card's rounded bottom off.
+            Section {
                 Button(action: logIn) {
                     HStack(spacing: 8) {
                         if busy { ProgressView() }
@@ -122,15 +129,14 @@ struct SettingsView: View {
                 .disabled(busy || user.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                if let loginError {
-                    Text(loginError).font(.footnote).foregroundStyle(.red)
-                }
-            } header: {
-                Text(text.iCanteen)
             } footer: {
-                Text(text.savedEncrypted)
+                VStack(alignment: .leading, spacing: 6) {
+                    if let loginError {
+                        Text(loginError).foregroundStyle(.red)
+                    }
+                    Text(text.savedEncrypted)
+                }
             }
-            .onAppear { if user.isEmpty { user = snap.icUser } }
         }
     }
 

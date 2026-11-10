@@ -176,7 +176,9 @@ struct TimetableProvider: AppIntentTimelineProvider {
             let upcoming = await nextWeek ?? []
             days = current + upcoming
             WidgetCache.save(cls.id, days)
+            WidgetCache.lastError = nil
         } catch {
+            WidgetCache.lastError = String(describing: error)
             days = WidgetCache.load(cls.id) ?? []
             offline = true
         }
@@ -296,7 +298,16 @@ struct TimetableWidgetView: View {
                 }
             }
         } else {
-            message(W.cantLoad)
+            VStack(spacing: 4) {
+                message(W.cantLoad)
+                if let error = WidgetCache.lastError {
+                    Text(error)
+                        .font(.system(size: 9))
+                        .foregroundStyle(palette.secondary)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.center)
+                }
+            }
         }
     }
 
