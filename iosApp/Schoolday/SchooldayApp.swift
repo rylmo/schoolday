@@ -31,16 +31,34 @@ final class KeychainStore: NSObject, SecureStore {
 
 /// Mirrors the shared app's navigation state so SwiftUI can draw the native controls.
 final class AppModel: NSObject, ObservableObject, ChromeListener {
-    let core = SchoolIos(secure: KeychainStore())
+    let core: SchoolIos
+    let settings: SettingsModel
     @Published var tab = 0
     @Published var settingsOpen = false
     @Published var barVisible = false
     @Published var dark = true
     @Published var titles = ["Today", "Timetable", "Lunch"]
+    @Published var weekView = false
+    @Published var permanent = false
+    /// Days until SideStore's signature runs out, once there are fewer than three.
+    @Published var daysLeft: Int? = SigningExpiry.daysLeft()
+
+    func checkExpiry() {
+        let days = SigningExpiry.daysLeft()
+        if days != daysLeft { withAnimation { daysLeft = days } }
+    }
 
     override init() {
+        let core = SchoolIos(secure: KeychainStore())
+        self.core = core
+        settings = SettingsModel(bridge: core.settingsBridge)
         super.init()
         core.chrome.listener = self
+    }
+
+    func timetableChanged(weekView: Bool, permanent: Bool) {
+        self.weekView = weekView
+        self.permanent = permanent
     }
 
     func changed(tab: Int32, settingsOpen: Bool, visible: Bool, dark: Bool, titles: [String]) {
@@ -65,7 +83,10 @@ struct SchooldayApp: App {
                 .preferredColorScheme(model.dark ? .dark : .light)
         }
         .onChange(of: phase) { newPhase in
-            if newPhase == .active { model.core.onForeground() }
+            if newPhase == .active {
+                model.core.onForeground()
+                model.checkExpiry()
+            }
         }
     }
 }

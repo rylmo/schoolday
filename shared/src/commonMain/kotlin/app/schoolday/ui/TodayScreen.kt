@@ -118,7 +118,9 @@ fun TodayScreen(
                     Eyebrow(S.monthDay(today))
                     Text(S.dayName(today), style = Type.display, color = T.text)
                 }
-                IconBtn(Ic.Settings, S.settings, onSettings, tint = T.text)
+                // iOS shows a floating Liquid Glass button here instead.
+                if (LocalNativeChrome.current == null) IconBtn(Ic.Settings, S.settings, onSettings, tint = T.text)
+                else Spacer(Modifier.size(44.dp))
             }
 
             LunchBlock(lunch, today, now, mySt?.data != null, myDay, listOfNotNull(mySt?.data, myNext), onOpenLunch, intro)

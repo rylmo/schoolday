@@ -1,5 +1,6 @@
 package app.schoolday.ui
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -104,12 +105,31 @@ fun TimetableScreen(vm: AppViewModel, classId: String, onClassChange: (String) -
 
     LaunchedEffect(classId, mode) { vm.loadTimetable(classId, mode) }
 
+    // iOS: the week/day switch and the menu are native Liquid Glass buttons above the screen.
+    val chrome = LocalNativeChrome.current
+    if (chrome != null) {
+        val permanent = mode == TimetableMode.Permanent
+        LaunchedEffect(weekView, permanent) { chrome.publishTimetable(weekView, permanent) }
+        DisposableEffect(chrome) {
+            val actions = TimetableActions(
+                toggleWeekView = { weekView = !weekView },
+                togglePermanent = { mode = if (mode == TimetableMode.Permanent) TimetableMode.Actual else TimetableMode.Permanent },
+            )
+            chrome.timetable = actions
+            onDispose { if (chrome.timetable === actions) chrome.timetable = null }
+        }
+    }
+
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         // class tabs with a sliding underline
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 4.dp, top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             ClassTabs(tabs, classId, { vm.className(it) }, onClassChange, Modifier.weight(1f))
-            IconBtn(if (weekView) Ic.Day else Ic.Week, if (weekView) S.dayView else S.weekView, { weekView = !weekView })
-            IconBtn(Ic.More, S.more, { menuOpen = true })
+            if (chrome == null) {
+                IconBtn(if (weekView) Ic.Day else Ic.Week, if (weekView) S.dayView else S.weekView, { weekView = !weekView })
+                IconBtn(Ic.More, S.more, { menuOpen = true })
+            } else {
+                Spacer(Modifier.size(width = 112.dp, height = 44.dp))
+            }
         }
 
         // week switcher

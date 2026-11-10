@@ -1,5 +1,6 @@
 package app.schoolday.ui
 
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -75,9 +76,9 @@ fun LunchScreen(vm: AppViewModel, sheetDate: String?, onSheetDate: (String?) -> 
                     Text(if (menu.source == LunchSource.ICanteen) "iCanteen" else S.schoolWebsite, style = Type.small, color = T.text3)
                 }
             }
-            IconBtn(Ic.External, S.openICanteen, {
-                uri.openUri(ICanteenClient.LOGIN_PAGE)
-            })
+            // iOS shows a floating Liquid Glass button here instead.
+            if (LocalNativeChrome.current == null) IconBtn(Ic.External, S.openICanteen, { uri.openUri(ICanteenClient.LOGIN_PAGE) })
+            else Spacer(Modifier.size(52.dp))
         }
 
         AnimatedVisibility(menu?.source == LunchSource.Website) {

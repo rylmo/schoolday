@@ -1,5 +1,7 @@
 package app.schoolday.ui
 
+import androidx.compose.runtime.staticCompositionLocalOf
+import app.schoolday.data.ICanteenClient
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
@@ -61,28 +63,54 @@ expect fun ProgressBackHandler(enabled: Boolean, onProgress: (Float) -> Unit, on
 class NativeChrome {
     internal var selectTab: (Int) -> Unit = {}
     internal var goBack: () -> Unit = {}
+    internal var showSettings: () -> Unit = {}
+    internal var timetable: TimetableActions? = null
     private var replay: ((ChromeListener) -> Unit)? = null
+    private var replayTimetable: ((ChromeListener) -> Unit)? = null
 
     var listener: ChromeListener? = null
         set(value) {
             field = value
-            if (value != null) replay?.invoke(value)
+            if (value != null) {
+                replay?.invoke(value)
+                replayTimetable?.invoke(value)
+            }
         }
+
+    /** The app's texts in the current language, for the native controls' labels. */
+    val text: Strings get() = S
+    val iCanteenUrl: String get() = ICanteenClient.LOGIN_PAGE
 
     fun select(tab: Int) = selectTab(tab)
     fun back() = goBack()
+    fun openSettings() = showSettings()
+    fun toggleWeekView() { timetable?.toggleWeekView?.invoke() }
+    fun togglePermanent() { timetable?.togglePermanent?.invoke() }
 
     internal fun publish(tab: Int, settingsOpen: Boolean, visible: Boolean, dark: Boolean, titles: List<String>) {
         val send: (ChromeListener) -> Unit = { it.changed(tab, settingsOpen, visible, dark, titles) }
         replay = send
         listener?.let(send)
     }
+
+    internal fun publishTimetable(weekView: Boolean, permanent: Boolean) {
+        val send: (ChromeListener) -> Unit = { it.timetableChanged(weekView, permanent) }
+        replayTimetable = send
+        listener?.let(send)
+    }
 }
+
+/** What the Timetable screen's native toolbar buttons do. */
+class TimetableActions(val toggleWeekView: () -> Unit, val togglePermanent: () -> Unit)
 
 /** Implemented by the host app to draw its native controls. */
 interface ChromeListener {
     fun changed(tab: Int, settingsOpen: Boolean, visible: Boolean, dark: Boolean, titles: List<String>)
+    fun timetableChanged(weekView: Boolean, permanent: Boolean)
 }
+
+/** Set on iOS, where toolbar buttons and Settings are native; screens then leave them out. */
+val LocalNativeChrome = staticCompositionLocalOf<NativeChrome?> { null }
 
 /** The whole app: theme, setup or main screens, startup animation and update prompt. */
 @Composable
@@ -90,7 +118,7 @@ fun SchoolApp(vm: AppViewModel, openRequest: MutableState<String?>, intro: Intro
     val settings by vm.settings.collectAsState()
     LaunchedEffect(settings.lang) { L.apply(settings.lang) }
     SchoolDayTheme(AppTheme.of(settings.theme)) {
-        CompositionLocalProvider(LocalBottomInset provides if (chrome != null) 84.dp else 0.dp) {
+        CompositionLocalProvider(LocalBottomInset provides if (chrome != null) 84.dp else 0.dp, LocalNativeChrome provides chrome) {
             Box(Modifier.fillMaxSize().background(T.bg)) {
                 if (settings.onboarded) AppRoot(vm, openRequest, intro, chrome) else SetupScreen(vm)
                 if (!intro.finished) IntroOverlay(intro)
@@ -141,12 +169,14 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
         DisposableEffect(chrome) {
             chrome.selectTab = { i -> tab = Tab.entries[i] }
             chrome.goBack = { showSettings = false }
-            onDispose { chrome.selectTab = {}; chrome.goBack = {} }
+            chrome.showSettings = { showSettings = true }
+            onDispose { chrome.selectTab = {}; chrome.goBack = {}; chrome.showSettings = {} }
         }
         val titles = listOf(S.today, S.timetable, S.lunch)
         val dark = T.isDark
         LaunchedEffect(tab, showSettings, intro.finished, titles, dark) {
-            chrome.publish(tab.ordinal, showSettings, intro.finished && !showSettings, dark, titles)
+            // Settings is a native sheet over the tab bar, so the bar stays.
+            chrome.publish(tab.ordinal, showSettings, intro.finished, dark, titles)
         }
     }
 
@@ -192,6 +222,14 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
             if (t != null) UndoBar(t.text, t.undo?.let { u -> { u(); toast = null } })
         }
 
+        // On iOS, Settings is a native sheet drawn by the host app.
+        if (chrome == null) SettingsLayer(vm, showSettings, backProgress) { showSettings = false }
+    }
+}
+
+@Composable
+private fun SettingsLayer(vm: AppViewModel, showSettings: Boolean, backProgress: Float, onBack: () -> Unit) {
+    Box(Modifier.fillMaxSize()) {
         val scrim by animateFloatAsState(if (showSettings) 0.5f * (1f - backProgress) else 0f, tween(300), label = "scrim")
         if (scrim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrim)))
 
@@ -205,7 +243,7 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
                 translationX = p * size.width * 0.12f
                 scaleX = 1f - 0.08f * p; scaleY = 1f - 0.08f * p
                 shape = RoundedCornerShape((36 * p).dp); clip = p > 0f
-            }) { SettingsScreen(vm, showBack = chrome == null, onBack = { showSettings = false }) }
+            }) { SettingsScreen(vm, showBack = true, onBack = onBack) }
         }
     }
 }

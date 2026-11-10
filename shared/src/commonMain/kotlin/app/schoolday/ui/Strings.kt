@@ -94,6 +94,14 @@ open class Strings {
     open val checkUpdates = "Check for updates"; open val checkingUpdates = "Checking…"; open val upToDate = "You're on the latest version"
     open fun versionLabel(v: String) = "Version $v"
 
+    // iPhone: the 7-day SideStore signature
+    open fun signingExpires(days: Int) = when (days) {
+        0 -> "Schoolday stops working today"
+        1 -> "Schoolday stops working tomorrow"
+        else -> "Schoolday stops working in $days days"
+    }
+    open val renewInSideStore = "Open SideStore with LocalDevVPN on to renew it"
+
     // notification
     open val channelName = "Lunch break"; open val channelDesc = "Shows today's lunch during your lunch break"; open val notifFallback = "Lunch"
 
@@ -188,6 +196,14 @@ object Czech : Strings() {
     override val updateBadFile = "Stažený soubor je poškozený. Zkus to znovu."
     override val checkUpdates = "Zkontrolovat aktualizace"; override val checkingUpdates = "Kontroluji…"; override val upToDate = "Máš nejnovější verzi"
     override fun versionLabel(v: String) = "Verze $v"
+
+    override fun signingExpires(days: Int) = when (days) {
+        0 -> "Schoolday dnes přestane fungovat"
+        1 -> "Schoolday zítra přestane fungovat"
+        in 2..4 -> "Schoolday přestane fungovat za $days dny"
+        else -> "Schoolday přestane fungovat za $days dní"
+    }
+    override val renewInSideStore = "Obnov ho v SideStoru se zapnutou LocalDevVPN"
 
     override val channelName = "Polední pauza"; override val channelDesc = "Ukazuje dnešní oběd během polední pauzy"; override val notifFallback = "Oběd"
 

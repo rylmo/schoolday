@@ -68,12 +68,16 @@ class SchoolIos(secure: SecureStore) {
     private val vm: AppViewModel
     private val intro: IntroState
 
+    /** The native Settings screen's access to the shared settings. */
+    val settingsBridge: SettingsBridge
+
     init {
         val platform = IosPlatform(secure)
         Http.setVersion(platform.versionName)
         val prefs = Prefs(platform.keyValues, platform.secureStore)
         L.apply(prefs.value.lang)
         vm = AppViewModel(platform, Repository(platform, prefs))
+        settingsBridge = SettingsBridge(vm)
         intro = IntroState(willPlay = prefs.value.onboarded && platform.introBlocker() == null)
         // SwiftUI doesn't reliably report "became active" for the launch itself, and Today has no load of its own.
         vm.refreshAll()

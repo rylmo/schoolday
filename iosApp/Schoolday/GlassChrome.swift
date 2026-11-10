@@ -5,51 +5,173 @@ import UIKit
 private let lunchOrange = UIColor(red: 0.949, green: 0.651, blue: 0.353, alpha: 1)
 
 /// The shared Compose screens with native controls above them: the system tab bar (Liquid Glass
-/// on iOS 26, including its selection lens) and a glass back button for Settings.
+/// on iOS 26, including its selection lens), floating glass toolbar buttons for each tab, and
+/// Settings as a native sheet.
 struct RootView: View {
     @ObservedObject var model: AppModel
 
+    private var settingsShown: Binding<Bool> {
+        Binding(
+            get: { model.settingsOpen },
+            set: { open in if !open { model.core.chrome.back() } }
+        )
+    }
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             ChromeHost(core: model.core, tab: model.tab, titles: model.titles, barVisible: model.barVisible)
                 .ignoresSafeArea()
-            if model.settingsOpen {
-                VStack(spacing: 0) {
-                    HStack {
-                        GlassBackButton { model.core.chrome.back() }
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
+            if model.barVisible {
+                TopButtons(model: model)
+                    .padding(.trailing, 16)
                     .padding(.top, 6)
-                    Spacer(minLength: 0)
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
+            }
+            if model.barVisible, let days = model.daysLeft {
+                ExpiryBanner(days: days, text: model.core.chrome.text)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 72)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .sheet(isPresented: settingsShown) {
+            SettingsView(model: model.settings) { model.core.chrome.back() }
+                .preferredColorScheme(model.dark ? .dark : .light)
+        }
     }
 }
 
-struct GlassBackButton: View {
-    let action: () -> Void
+/// The current tab's toolbar buttons, floating in the top corner like iOS 26 toolbar items.
+private struct TopButtons: View {
+    @ObservedObject var model: AppModel
+    @Environment(\.openURL) private var openURL
+
+    private var chrome: NativeChrome { model.core.chrome }
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
+        let text = chrome.text
+        switch model.tab {
+        case 1:
+            HStack(spacing: 0) {
+                Button { chrome.toggleWeekView() } label: {
+                    ToolbarIcon(symbol: model.weekView ? "rectangle.split.1x2" : "list.bullet")
+                }
+                .accessibilityLabel(model.weekView ? text.dayView : text.weekView)
+                Menu {
+                    Toggle(isOn: Binding(get: { model.permanent }, set: { _ in chrome.togglePermanent() })) {
+                        Label(text.permanentTimetable, systemImage: "calendar.badge.clock")
+                    }
+                    Button { chrome.openSettings() } label: {
+                        Label(text.settings, systemImage: "gearshape")
+                    }
+                } label: {
+                    ToolbarIcon(symbol: "ellipsis")
+                }
+                .accessibilityLabel(text.more)
+            }
+            .buttonStyle(.plain)
+            .modifier(GlassShape(capsule: true))
+        case 2:
+            Button {
+                if let url = URL(string: chrome.iCanteenUrl) { openURL(url) }
+            } label: {
+                ToolbarIcon(symbol: "safari")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(text.openICanteen)
+            .modifier(GlassShape(capsule: false))
+        default:
+            Button { chrome.openSettings() } label: {
+                ToolbarIcon(symbol: "gearshape")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(text.settings)
+            .modifier(GlassShape(capsule: false))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Back")
-        .modifier(GlassCircle())
     }
 }
 
-private struct GlassCircle: ViewModifier {
+/// Shown a few days before SideStore's 7-day signature runs out, in case the refresh automation
+/// didn't run. Tapping it opens SideStore.
+private struct ExpiryBanner: View {
+    let days: Int
+    let text: Strings
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Button {
+            if let url = URL(string: "sidestore://") { openURL(url) }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "exclamationmark.arrow.circlepath")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color(lunchOrange))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(text.signingExpires(days: Int32(days)))
+                        .font(.subheadline.weight(.semibold))
+                    Text(text.renewInSideStore)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .modifier(GlassShape(capsule: true))
+    }
+}
+
+/// When the signature SideStore put on this app expires. Nil in builds it hasn't signed.
+enum SigningExpiry {
+    static func date() -> Date? {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let start = data.range(of: Data("<?xml".utf8)),
+              let end = data.range(of: Data("</plist>".utf8), in: start.lowerBound ..< data.endIndex)
+        else { return nil }
+        let plist = data.subdata(in: start.lowerBound ..< end.upperBound)
+        let dict = try? PropertyListSerialization.propertyList(from: plist, format: nil) as? [String: Any]
+        return dict?["ExpirationDate"] as? Date
+    }
+
+    /// Whole days left, or nil while there are still at least three.
+    static func daysLeft(now: Date = Date()) -> Int? {
+        guard let expiry = date() else { return nil }
+        let left = expiry.timeIntervalSince(now)
+        guard left < 3 * 86_400 else { return nil }
+        return max(0, Int(left / 86_400))
+    }
+}
+
+private struct ToolbarIcon: View {
+    let symbol: String
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.primary)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+    }
+}
+
+private struct GlassShape: ViewModifier {
+    let capsule: Bool
+
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.glassEffect(.regular.interactive(), in: Circle())
+            if capsule {
+                content.glassEffect(.regular.interactive(), in: Capsule())
+            } else {
+                content.glassEffect(.regular.interactive(), in: Circle())
+            }
+        } else if capsule {
+            content.background(.ultraThinMaterial, in: Capsule())
         } else {
             content.background(.ultraThinMaterial, in: Circle())
         }
