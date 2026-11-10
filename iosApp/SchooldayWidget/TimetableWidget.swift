@@ -258,8 +258,11 @@ struct TimetableEntry: TimelineEntry {
 }
 
 struct TimetableProvider: AppIntentTimelineProvider {
+    /// What iOS shows while the real content is being prepared (resizing, reloads, the gallery):
+    /// sample lessons. It carries an empty class id, not nil, because nil means "no class chosen"
+    /// and showed the "pick a class" hint at those moments.
     func placeholder(in context: Context) -> TimetableEntry {
-        TimetableEntry(date: Date(), classId: nil, className: "IT3B", window: Self.sample, canUp: true, canDown: true, direction: 1, offline: false)
+        TimetableEntry(date: Date(), classId: "", className: "IT3B", window: Self.sample, canUp: true, canDown: true, direction: 1, offline: false)
     }
 
     func snapshot(for configuration: TimetableWidgetIntent, in context: Context) async -> TimetableEntry {
@@ -523,7 +526,7 @@ struct TimetableWidgetView: View {
 
     /// Opens the app on this class and the day shown.
     private var link: URL? {
-        guard let id = entry.classId else { return nil }
+        guard let id = entry.classId, !id.isEmpty else { return nil }
         let day = entry.window.map { "?date=\($0.day.date)" } ?? ""
         return URL(string: "schoolday://timetable/\(id)\(day)")
     }
