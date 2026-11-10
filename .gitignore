@@ -14,3 +14,4 @@ iosApp/build/
 iosApp/Payload/
 iosApp/Schoolday/Info.plist
 iosApp/SchooldayWidget/Info.plist
+*.exe
