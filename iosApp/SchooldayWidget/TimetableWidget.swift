@@ -24,19 +24,24 @@ private enum W {
 
 private enum Metrics {
     static let padding: CGFloat = 12
-    static let headerHeight: CGFloat = 16
+    static let headerHeight: CGFloat = 22
     static let headerGap: CGFloat = 6
-    static let rowGap: CGFloat = 4
+    static let smallRowHeight: CGFloat = 26
     static let rowHeight: CGFloat = 30
     /// Each extra group in a merged row adds a detail line (medium only).
     static let extraLine: CGFloat = 13
     static let maxGroupLines = 3
-    static let arrowSize: CGFloat = 34
+    /// Small: two round buttons in the header. Medium: two bigger ones beside the rows.
+    static let headerArrow: CGFloat = 22
+    static let sideArrow: CGFloat = 30
+    static let sideArrowGap: CGFloat = 10
     /// How far each arrow tap moves.
     static let step = 2
 
+    static func gap(small: Bool) -> CGFloat { small ? 3 : 4 }
+
     static func height(_ row: LessonRow, small: Bool) -> CGFloat {
-        small ? rowHeight : rowHeight + extraLine * CGFloat(min(row.parts.count, maxGroupLines) - 1)
+        small ? smallRowHeight : rowHeight + extraLine * CGFloat(min(row.parts.count, maxGroupLines) - 1)
     }
 }
 
@@ -145,13 +150,19 @@ struct LessonRow: Hashable {
     }
 }
 
-/// What the widget shows at once: some rows of one day.
+/// What the widget shows at once: one day, scrolled so that row [first] is at the top.
+/// All of the day's rows are kept, so moving within a day slides them instead of swapping them.
 struct Window: Hashable {
     var day: WidgetDay
     var first: Int
     var rows: [LessonRow]
 
     var key: String { "\(day.date)#\(first)" }
+
+    /// How far the day's rows are moved up to put row [first] at the top.
+    func offset(small: Bool) -> CGFloat {
+        rows.prefix(first).reduce(0) { $0 + Metrics.height($1, small: small) + Metrics.gap(small: small) }
+    }
 }
 
 enum Windows {
@@ -194,8 +205,7 @@ enum Windows {
             }
             for start in starts {
                 if i == autoDay, start == begin { auto = windows.count }
-                let fits = fitting(rows, from: start, budget: budget, small: small)
-                windows.append(Window(day: day, first: start, rows: Array(rows[start ..< min(start + fits, rows.count)])))
+                windows.append(Window(day: day, first: start, rows: rows))
             }
         }
         return (windows, auto)
@@ -206,7 +216,7 @@ enum Windows {
         var used: CGFloat = 0
         var count = 0
         for row in rows[start...] {
-            let h = Metrics.height(row, small: small) + (count > 0 ? Metrics.rowGap : 0)
+            let h = Metrics.height(row, small: small) + (count > 0 ? Metrics.gap(small: small) : 0)
             if count > 0, used + h > budget { break }
             used += h
             count += 1
@@ -346,27 +356,40 @@ struct TimetableWidgetView: View {
     private var palette: Palette { Palette(fullColor: renderingMode == .fullColor, dark: scheme == .dark) }
     private var small: Bool { family == .systemSmall }
 
+    private var arrowsShown: Bool { entry.classId != nil && entry.window != nil }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        ZStack(alignment: .trailing) {
             VStack(alignment: .leading, spacing: Metrics.headerGap) {
-                Text(dayTitle)
-                    .font(.system(size: small ? 11 : 12, weight: .bold))
-                    .foregroundStyle(palette.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                    .frame(height: Metrics.headerHeight)
-                    .contentTransition(.opacity)
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .clipped()
-            }
-            if let id = entry.classId, entry.window != nil {
-                VStack(spacing: 0) {
-                    arrow("chevron.up", step: -Metrics.step, enabled: entry.canUp, classId: id)
-                    Spacer(minLength: 6)
-                    arrow("chevron.down", step: Metrics.step, enabled: entry.canDown, classId: id)
+                // Small: the buttons sit in the header, out of the lessons' way.
+                HStack(spacing: 6) {
+                    Text(dayTitle)
+                        .font(.system(size: small ? 11 : 12, weight: .bold))
+                        .foregroundStyle(palette.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                        .contentTransition(.opacity)
+                    Spacer(minLength: 0)
+                    if small, arrowsShown, let id = entry.classId {
+                        arrow("chevron.up", step: -Metrics.step, enabled: entry.canUp, classId: id, size: Metrics.headerArrow)
+                        arrow("chevron.down", step: Metrics.step, enabled: entry.canDown, classId: id, size: Metrics.headerArrow)
+                    }
                 }
-                .frame(maxHeight: .infinity)
+                .frame(height: Metrics.headerHeight)
+                HStack(spacing: 8) {
+                    content
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .clipped()
+                    // Medium: room for the side buttons, which rows rarely reach anyway.
+                    if !small, arrowsShown { Color.clear.frame(width: Metrics.sideArrow) }
+                }
+            }
+            // Medium: bigger buttons, centred on the whole widget.
+            if !small, arrowsShown, let id = entry.classId {
+                VStack(spacing: Metrics.sideArrowGap) {
+                    arrow("chevron.up", step: -Metrics.step, enabled: entry.canUp, classId: id, size: Metrics.sideArrow)
+                    arrow("chevron.down", step: Metrics.step, enabled: entry.canDown, classId: id, size: Metrics.sideArrow)
+                }
             }
         }
         .padding(Metrics.padding)
@@ -374,12 +397,12 @@ struct TimetableWidgetView: View {
         .widgetURL(link)
     }
 
-    private func arrow(_ symbol: String, step: Int, enabled: Bool, classId: String) -> some View {
+    private func arrow(_ symbol: String, step: Int, enabled: Bool, classId: String, size: CGFloat) -> some View {
         Button(intent: ShiftPageIntent(classId: classId, step: step)) {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: size * 0.45, weight: .bold))
                 .foregroundStyle(palette.text)
-                .frame(width: Metrics.arrowSize, height: Metrics.arrowSize)
+                .frame(width: size, height: size)
                 .background(Circle().fill(palette.row))
         }
         .buttonStyle(.plain)
@@ -396,18 +419,24 @@ struct TimetableWidgetView: View {
                 if window.rows.isEmpty {
                     message(window.day.dayOff && !window.day.dayOffName.isEmpty ? window.day.dayOffName : W.noLessons)
                 } else {
-                    VStack(spacing: Metrics.rowGap) {
-                        ForEach(window.rows, id: \.self) { row in
+                    // The whole day, moved up so row [first] is at the top. Within a day the rows keep
+                    // their identity, so a tap glides them two lines instead of swapping them.
+                    VStack(spacing: Metrics.gap(small: small)) {
+                        ForEach(window.rows, id: \.start) { row in
                             if small { SmallRow(row: row, palette: palette) } else { MediumRow(row: row, palette: palette) }
                         }
                     }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .offset(y: -window.offset(small: small))
+                    // `.smooth` is a critically damped spring: it eases like one but never overshoots.
+                    .animation(.smooth(duration: 0.4), value: window.first)
                 }
             }
-            // Each tap slides the rows in from the side it moves towards. `.smooth` is a critically
-            // damped spring: it eases like one but never overshoots and bounces back.
-            .id(window.key)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // A different day pushes in from the side the tap moves towards.
+            .id(window.day.date)
             .transition(.push(from: entry.direction < 0 ? .top : .bottom))
-            .animation(.smooth(duration: 0.4), value: window.key)
+            .animation(.smooth(duration: 0.4), value: window.day.date)
         } else {
             VStack(spacing: 4) {
                 message(W.cantLoad)
@@ -528,32 +557,32 @@ private struct SmallRow: View {
             Capsule()
                 .fill(row.changed ? palette.accent : Color.clear)
                 .frame(width: 3)
-                .padding(.vertical, 5)
+                .padding(.vertical, 4)
                 .widgetAccentable()
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
-                    Text(row.period).font(.system(size: 11, weight: .bold))
-                    Text(hm(row.start)).font(.system(size: 11, weight: .medium).monospacedDigit())
+                    Text(row.period).font(.system(size: 10, weight: .bold))
+                    Text(hm(row.start)).font(.system(size: 10, weight: .medium).monospacedDigit())
                 }
                 .foregroundStyle(row.changed ? palette.accent : palette.secondary)
                 .widgetAccentable()
                 HStack(spacing: 4) {
                     Text(row.abbrev)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(palette.text)
                         .strikethrough(row.cancelled)
                         .layoutPriority(1)
                     Text(row.rooms)
-                        .font(.system(size: 11))
+                        .font(.system(size: 10))
                         .foregroundStyle(palette.secondary)
                 }
                 .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .frame(height: Metrics.rowHeight)
+        .frame(height: Metrics.smallRowHeight)
         .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(row.changed ? palette.changedRow : palette.row)
         )
         .opacity(row.cancelled ? 0.6 : 1)

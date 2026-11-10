@@ -122,12 +122,16 @@ enum Bakalari {
                     let group = (atom.GroupsNames ?? "").trimmingCharacters(in: .whitespaces)
                     let room = (atom.Room ?? "").trimmingCharacters(in: .whitespaces)
                     let teacher = (atom.TeacherFullname ?? atom.Teacher ?? "").trimmingCharacters(in: .whitespaces)
+                    let detail = [group.isEmpty ? nil : group, room.isEmpty ? nil : room, teacher.isEmpty ? nil : teacher]
+                        .compactMap { $0 }.joined(separator: " · ")
+                    let abbrev = (atom.SubjectAbbrev ?? "").trimmingCharacters(in: .whitespaces)
+                    let name = subject.isEmpty ? cancelledName(info) : subject
                     return WidgetLesson(
                         period: period, start: begin, end: end,
-                        subject: subject.isEmpty ? cancelledName(info) : subject,
-                        abbrev: (atom.SubjectAbbrev ?? "").trimmingCharacters(in: .whitespaces),
-                        detail: [group.isEmpty ? nil : group, room.isEmpty ? nil : room, teacher.isEmpty ? nil : teacher]
-                            .compactMap { $0 }.joined(separator: " · "),
+                        subject: name,
+                        abbrev: abbrev.isEmpty && subject.isEmpty ? name : abbrev,
+                        // A lesson that isn't taking place says what happened to it instead.
+                        detail: cancelled ? (changeNote(info, lessonDate: date, today: today) ?? detail) : detail,
                         room: room,
                         changed: (atom.HasChanged ?? false) || !info.isEmpty,
                         cancelled: cancelled
@@ -137,6 +141,28 @@ enum Bakalari {
             .sorted { ($0.start, $0.cancelled ? 1 : 0) < ($1.start, $1.cancelled ? 1 : 0) }
             return WidgetDay(date: date, dayOff: day.DayOff ?? false, dayOffName: day.DayOffName ?? "", lessons: lessons)
         }
+    }
+
+    private static let czech = (Locale.preferredLanguages.first ?? "").hasPrefix("cs")
+
+    /// "Přesun na 11.11., 8:00: …" → "Moved to period 1" (same day) or "Moved to 12. 11. 8:00";
+    /// "Zrušeno (…)" → "Cancelled"; "Vyjmuto z rozvrhu (…)" → "Removed from the timetable".
+    private static func changeNote(_ info: String, lessonDate: String, today: Date) -> String? {
+        if info.hasPrefix("Zrušeno") { return czech ? "Zrušeno" : "Cancelled" }
+        if info.hasPrefix("Vyjmuto") { return czech ? "Vyjmuto z rozvrhu" : "Removed from the timetable" }
+        guard info.hasPrefix("Přesun na"),
+              let regex = try? NSRegularExpression(pattern: #"(\d{1,2})\.\s*(\d{1,2})\.\s*,?\s*(\d{1,2}):(\d{2})"#),
+              let m = regex.firstMatch(in: info, range: NSRange(info.startIndex..., in: info))
+        else { return nil }
+        let ns = info as NSString
+        let part = { (i: Int) in Int(ns.substring(with: m.range(at: i))) ?? 0 }
+        let (day, month, hour, minute) = (part(1), part(2), part(3), part(4))
+        let time = String(format: "%d:%02d", hour, minute)
+        if resolveDate("\(day).\(month).", today: today) == lessonDate,
+           let period = periodStarts.firstIndex(where: { abs($0 - (hour * 60 + minute)) <= 5 }) {
+            return czech ? "Přesunuto na \(period). hodinu" : "Moved to period \(period)"
+        }
+        return czech ? "Přesunuto na \(day). \(month). \(time)" : "Moved to \(day). \(month). \(time)"
     }
 
     /// "Zrušeno (ZET, Žabčík Evžen)" → "ZET"; "Přesun na 11.11., 8:00: ZSV, Vejmelková Dana, V311" → "ZSV"
