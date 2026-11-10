@@ -88,10 +88,12 @@ class SchoolIos(secure: SecureStore) {
         SchoolApp(vm, openRequest, intro, chrome)
     }
 
-    /** schoolday://timetable/<class id> (from the widget) opens that class's timetable. */
+    /** schoolday://timetable/<class id>?date=yyyy-MM-dd (from the widget) opens that class on that day. */
     fun openLink(url: String) {
-        val classId = url.substringAfter("schoolday://timetable/", "").substringBefore('?').trim('/')
-        if (classId.isNotEmpty()) openRequest.value = OPEN_TIMETABLE + classId
+        val rest = url.substringAfter("schoolday://timetable/", "")
+        val classId = rest.substringBefore('?').trim('/')
+        val date = rest.substringAfter("date=", "").substringBefore('&')
+        if (classId.isNotEmpty()) openRequest.value = OPEN_TIMETABLE + classId + (if (date.isNotEmpty()) "@$date" else "")
     }
 
     /** Called whenever the app comes to the foreground. */

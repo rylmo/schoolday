@@ -136,6 +136,11 @@ struct LessonRow: Hashable {
                 rows.append(LessonRow(period: lesson.period, start: lesson.start, end: lesson.end, parts: [lesson]))
             }
         }
+        // A lesson moved away or cancelled only stays (struck through) when nothing replaces it,
+        // so "ZSV moved here, MAT moved away" shows just ZSV, not two groups.
+        for i in rows.indices where rows[i].parts.contains(where: { !$0.cancelled }) {
+            rows[i].parts.removeAll { $0.cancelled }
+        }
         return rows.sorted { $0.start < $1.start }
     }
 }
@@ -366,7 +371,7 @@ struct TimetableWidgetView: View {
         }
         .padding(Metrics.padding)
         .containerBackground(for: .widget) { palette.background }
-        .widgetURL(entry.classId.flatMap { URL(string: "schoolday://timetable/\($0)") })
+        .widgetURL(link)
     }
 
     private func arrow(_ symbol: String, step: Int, enabled: Bool, classId: String) -> some View {
@@ -423,6 +428,13 @@ struct TimetableWidgetView: View {
             .foregroundStyle(palette.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .multilineTextAlignment(.center)
+    }
+
+    /// Opens the app on this class and the day shown.
+    private var link: URL? {
+        guard let id = entry.classId else { return nil }
+        let day = entry.window.map { "?date=\($0.day.date)" } ?? ""
+        return URL(string: "schoolday://timetable/\(id)\(day)")
     }
 
     private var dayDate: Date? { entry.window.flatMap { WidgetDates.date(from: $0.day.date) } }

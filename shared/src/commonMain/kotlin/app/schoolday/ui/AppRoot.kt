@@ -49,7 +49,7 @@ import kotlinx.coroutines.delay
 /** Notification tap: open the Lunch tab with today's details. */
 const val OPEN_LUNCH_TODAY = "lunch_today"
 
-/** Widget tap on iOS: open the Timetable tab on the class that follows this prefix. */
+/** Widget tap on iOS: open the Timetable tab on "<class id>" or "<class id>@<yyyy-MM-dd>" after this prefix. */
 const val OPEN_TIMETABLE = "timetable:"
 
 /** Back gesture on Android; nothing on iOS, where the glass back button is used. */
@@ -146,6 +146,8 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
     val settings by vm.settings.collectAsState()
     var selectedClass by rememberSaveable { mutableStateOf(settings.shownClasses.firstOrNull() ?: settings.myClass) }
     var backProgress by remember { mutableFloatStateOf(0f) }
+    /** A day the Timetable tab should jump to (from the iOS widget), until it has. */
+    var timetableDate by remember { mutableStateOf<String?>(null) }
     var toast by remember { mutableStateOf<UiEvent.Toast?>(null) }
     val haptics = LocalHapticFeedback.current
 
@@ -157,8 +159,10 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
             lunchSheetDate = todayDate().toString()
             openRequest.value = null
         } else if (request != null && request.startsWith(OPEN_TIMETABLE)) {
+            val target = request.removePrefix(OPEN_TIMETABLE)
             showSettings = false
-            selectedClass = request.removePrefix(OPEN_TIMETABLE)
+            selectedClass = target.substringBefore('@')
+            timetableDate = target.substringAfter('@', "").ifEmpty { null }
             tab = Tab.Timetable
             openRequest.value = null
         }
@@ -210,7 +214,10 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
                         onSettings = { showSettings = true },
                         intro = intro,
                     )
-                    Tab.Timetable -> TimetableScreen(vm, selectedClass, onClassChange = { selectedClass = it }, onSettings = { showSettings = true })
+                    Tab.Timetable -> TimetableScreen(
+                        vm, selectedClass, onClassChange = { selectedClass = it }, onSettings = { showSettings = true },
+                        openDate = timetableDate, onOpened = { timetableDate = null },
+                    )
                     Tab.Lunch -> LunchScreen(vm, lunchSheetDate, onSheetDate = { lunchSheetDate = it }, onSettings = { showSettings = true })
                 }
             }

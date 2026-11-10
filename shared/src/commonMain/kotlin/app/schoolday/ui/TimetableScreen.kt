@@ -82,7 +82,10 @@ import app.schoolday.ui.theme.T
 import app.schoolday.ui.theme.Type
 import kotlinx.coroutines.launch
 import app.schoolday.data.todayDate
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.daysUntil
+import kotlinx.datetime.minus
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.number
 import kotlin.math.absoluteValue
@@ -90,7 +93,14 @@ import kotlin.math.absoluteValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimetableScreen(vm: AppViewModel, classId: String, onClassChange: (String) -> Unit, onSettings: () -> Unit) {
+fun TimetableScreen(
+    vm: AppViewModel,
+    classId: String,
+    onClassChange: (String) -> Unit,
+    onSettings: () -> Unit,
+    openDate: String? = null,
+    onOpened: () -> Unit = {},
+) {
     val settings by vm.settings.collectAsState()
     val tts by vm.timetables.collectAsState()
     val today = todayDate()
@@ -104,6 +114,16 @@ fun TimetableScreen(vm: AppViewModel, classId: String, onClassChange: (String) -
     val tabs = vm.timetableClasses(settings, classId)
 
     LaunchedEffect(classId, mode) { vm.loadTimetable(classId, mode) }
+
+    // Opened from the iOS widget: show the week and day it was showing.
+    LaunchedEffect(openDate) {
+        val date = openDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@LaunchedEffect
+        val monday = today.minus(todayIdx, DateTimeUnit.DAY)
+        mode = if (monday.daysUntil(date) >= 7) TimetableMode.Next else TimetableMode.Actual
+        dayIdx = (date.dayOfWeek.isoDayNumber - 1).coerceIn(0, 4)
+        weekView = false
+        onOpened()
+    }
 
     // iOS: the week/day switch and the menu are native Liquid Glass buttons above the screen.
     val chrome = LocalNativeChrome.current
@@ -231,6 +251,10 @@ private fun DayPager(
     val pager = rememberPagerState(initialPage = dayIdx.coerceIn(0, 4)) { 5 }
     val scope = rememberCoroutineScope()
     LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect(onDayChange) }
+    // Follow a day chosen from outside (the iOS widget), but never fight a swipe in progress.
+    LaunchedEffect(dayIdx) {
+        if (pager.currentPage != dayIdx && !pager.isScrollInProgress) pager.scrollToPage(dayIdx.coerceIn(0, 4))
+    }
 
     Column(Modifier.fillMaxSize()) {
         DayPicker(days, pager, showToday, todayIdx) { scope.launch { pager.animateScrollToPage(it) } }
