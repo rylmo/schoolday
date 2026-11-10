@@ -190,9 +190,14 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
         }
         val titles = listOf(S.today, S.timetable, S.lunch)
         val dark = T.isDark
-        LaunchedEffect(tab, showSettings, intro.finished, titles, dark) {
+        // The native tab bar and buttons sit above everything Compose draws, so they step aside
+        // while the update panel is up; its backdrop then covers the whole screen.
+        val update by vm.update.collectAsState()
+        val updateShown = update is UpdateUi.Available || update is UpdateUi.NeedsPermission ||
+            update is UpdateUi.Downloading || update is UpdateUi.Installing || update is UpdateUi.Failed
+        LaunchedEffect(tab, showSettings, intro.finished, updateShown, titles, dark) {
             // Settings is a native sheet over the tab bar, so the bar stays.
-            chrome.publish(tab.ordinal, showSettings, intro.finished, dark, titles)
+            chrome.publish(tab.ordinal, showSettings, intro.finished && !updateShown, dark, titles)
         }
     }
 
