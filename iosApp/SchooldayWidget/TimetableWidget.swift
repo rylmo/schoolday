@@ -270,6 +270,11 @@ struct TimetableProvider: AppIntentTimelineProvider {
     func timeline(for configuration: TimetableWidgetIntent, in context: Context) async -> Timeline<TimetableEntry> {
         let now = Date()
         let list = await entries(for: configuration, in: context, now: now)
+        // Right after an arrow tap only "now" (and the reset) is planned, so the tap redraws
+        // quickly; the full day's plan is made at the next reload, just after the reset.
+        if WidgetCache.recentTap(now: now) != nil {
+            return Timeline(entries: list, policy: .after(now.addingTimeInterval(WidgetCache.manualHold + 2)))
+        }
         return Timeline(entries: list, policy: .after(now.addingTimeInterval(45 * 60)))
     }
 
@@ -312,7 +317,9 @@ struct TimetableProvider: AppIntentTimelineProvider {
         let todayKey = WidgetDates.key(now)
         let startOfDay = Calendar.current.startOfDay(for: now)
         let ends = Set(days.first { $0.date == todayKey }?.lessons.map(\.end) ?? [])
-        var moments = ends.sorted()
+        // After a tap, skip them: every planned entry is drawn up front, which slows the redraw.
+        let tapped = WidgetCache.recentTap(now: now) != nil
+        var moments = tapped ? [] : ends.sorted()
             .map { startOfDay.addingTimeInterval(TimeInterval($0 * 60)) }
             .filter { $0 > now }
 
