@@ -33,6 +33,7 @@ final class KeychainStore: NSObject, SecureStore {
 final class AppModel: NSObject, ObservableObject, ChromeListener {
     let core: SchoolIos
     let settings: SettingsModel
+    let installer: SideStoreInstaller
     @Published var tab = 0
     @Published var settingsOpen = false
     @Published var barVisible = false
@@ -55,7 +56,9 @@ final class AppModel: NSObject, ObservableObject, ChromeListener {
     }
 
     override init() {
-        let core = SchoolIos(secure: KeychainStore())
+        let installer = SideStoreInstaller()
+        self.installer = installer
+        let core = SchoolIos(secure: KeychainStore(), installer: installer)
         self.core = core
         settings = SettingsModel(bridge: core.settingsBridge)
         super.init()
@@ -87,12 +90,17 @@ struct SchooldayApp: App {
         WindowGroup {
             RootView(model: model)
                 .preferredColorScheme(model.dark ? .dark : .light)
-                .onOpenURL { url in model.core.openLink(url: url.absoluteString) }
+                .onOpenURL { url in
+                    // A bare schoolday:// is LocalDevVPN handing back during an update.
+                    if (url.host ?? "").isEmpty, model.installer.resume() { return }
+                    model.core.openLink(url: url.absoluteString)
+                }
         }
         .onChange(of: phase) { newPhase in
             if newPhase == .active {
                 model.core.onForeground()
                 model.checkExpiry()
+                if model.installer.consumeRecheck() { model.core.recheckUpdate() }
             }
         }
     }

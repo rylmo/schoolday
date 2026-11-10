@@ -13,6 +13,7 @@ import app.schoolday.ui.OPEN_TIMETABLE
 import app.schoolday.ui.SchoolApp
 import app.schoolday.update.AppUpdater
 import app.schoolday.update.IosUpdater
+import app.schoolday.update.UpdateInstaller
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSApplicationSupportDirectory
@@ -30,7 +31,7 @@ import platform.UIKit.UIDevice
 import platform.UIKit.UIViewController
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-private class IosPlatform(override val secureStore: SecureStore) : Platform {
+private class IosPlatform(override val secureStore: SecureStore, installer: UpdateInstaller) : Platform {
     private val defaults = NSUserDefaults.standardUserDefaults
 
     private val dir: String = run {
@@ -44,7 +45,7 @@ private class IosPlatform(override val secureStore: SecureStore) : Platform {
     private val buildNumber: Int
         get() = (NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String)?.toIntOrNull() ?: 0
 
-    override val updater: AppUpdater = IosUpdater { buildNumber }
+    override val updater: AppUpdater = IosUpdater({ buildNumber }, installer)
 
     override val deviceInfo: String
         get() = "${UIDevice.currentDevice.systemName} ${UIDevice.currentDevice.systemVersion}, ${UIDevice.currentDevice.model}"
@@ -71,7 +72,7 @@ private class IosPlatform(override val secureStore: SecureStore) : Platform {
 }
 
 /** Entry point used by the SwiftUI app. */
-class SchoolIos(secure: SecureStore) {
+class SchoolIos(secure: SecureStore, installer: UpdateInstaller) {
     val chrome = NativeChrome()
     private val vm: AppViewModel
     private val intro: IntroState
@@ -80,7 +81,7 @@ class SchoolIos(secure: SecureStore) {
     val settingsBridge: SettingsBridge
 
     init {
-        val platform = IosPlatform(secure)
+        val platform = IosPlatform(secure, installer)
         Http.setVersion(platform.versionName)
         val prefs = Prefs(platform.keyValues, platform.secureStore)
         L.apply(prefs.value.lang)
@@ -107,6 +108,9 @@ class SchoolIos(secure: SecureStore) {
 
     /** Called whenever the app comes to the foreground. */
     fun onForeground() = vm.refreshAll()
+
+    /** After an update was handed to SideStore and the app is still running the old build: offer it again. */
+    fun recheckUpdate() = vm.checkForUpdate()
 
     private val openRequest = mutableStateOf<String?>(null)
 }
