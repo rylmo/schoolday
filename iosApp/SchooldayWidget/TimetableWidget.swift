@@ -70,8 +70,17 @@ struct ClassQuery: EntityQuery {
         return cached.map { ClassEntity(id: $0.id, name: $0.name) }
     }
 
+    private func cached() -> [ClassEntity] {
+        guard let data = UserDefaults.standard.data(forKey: Self.cacheKey),
+              let list = try? JSONDecoder().decode([WidgetClass].self, from: data) else { return [] }
+        return list.map { ClassEntity(id: $0.id, name: $0.name) }
+    }
+
+    /// Runs on every redraw (each arrow tap too), so it uses the saved class list and only
+    /// downloads when a class isn't in it. Downloading here is what made taps slow.
     func entities(for identifiers: [String]) async throws -> [ClassEntity] {
-        let known = await all()
+        var known = cached()
+        if identifiers.contains(where: { id in !known.contains { $0.id == id } }) { known = await all() }
         return identifiers.map { id in known.first { $0.id == id } ?? ClassEntity(id: id, name: id) }
     }
 
@@ -156,6 +165,8 @@ struct Window: Hashable {
     var day: WidgetDay
     var first: Int
     var rows: [LessonRow]
+    /// How many rows from [first] fit; the rest fade out instead of showing half-cut at the edge.
+    var count: Int = 0
 
     var key: String { "\(day.date)#\(first)" }
 
@@ -205,7 +216,8 @@ enum Windows {
             }
             for start in starts {
                 if i == autoDay, start == begin { auto = windows.count }
-                windows.append(Window(day: day, first: start, rows: rows))
+                let fits = fitting(rows, from: start, budget: budget, small: small)
+                windows.append(Window(day: day, first: start, rows: rows, count: fits))
             }
         }
         return (windows, auto)
@@ -420,16 +432,25 @@ struct TimetableWidgetView: View {
                     message(window.day.dayOff && !window.day.dayOffName.isEmpty ? window.day.dayOffName : W.noLessons)
                 } else {
                     // The whole day, moved up so row [first] is at the top. Within a day the rows keep
-                    // their identity, so a tap glides them two lines instead of swapping them.
-                    VStack(spacing: Metrics.gap(small: small)) {
-                        ForEach(window.rows, id: \.start) { row in
-                            if small { SmallRow(row: row, palette: palette) } else { MediumRow(row: row, palette: palette) }
+                    // their identity, so a tap glides them two lines instead of swapping them. They hang
+                    // in an overlay so the day's full height never resizes the widget's layout.
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay(alignment: .top) {
+                            VStack(spacing: Metrics.gap(small: small)) {
+                                ForEach(Array(window.rows.enumerated()), id: \.element.start) { index, row in
+                                    Group {
+                                        if small { SmallRow(row: row, palette: palette) } else { MediumRow(row: row, palette: palette) }
+                                    }
+                                    .opacity(index >= window.first && index < window.first + window.count ? 1 : 0)
+                                }
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                            .offset(y: -window.offset(small: small))
+                            // `.smooth` is a critically damped spring: it eases like one but never overshoots.
+                            .animation(.smooth(duration: 0.4), value: window.first)
                         }
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .offset(y: -window.offset(small: small))
-                    // `.smooth` is a critically damped spring: it eases like one but never overshoots.
-                    .animation(.smooth(duration: 0.4), value: window.first)
+                        .clipped()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
