@@ -137,9 +137,9 @@ object BakalariClient {
         return if (i >= 0) i.toString() else ""
     }
 
-    /** "2.11." → 2026-11-02, picking the year that puts the date nearest to today. */
+    /** "2.11." (or "2/11" on the English page) → 2026-11-02, picking the year nearest to today. */
     private fun resolveDate(text: String, today: LocalDate): String {
-        val m = Regex("""(\d{1,2})\.\s*(\d{1,2})\.""").find(text) ?: return ""
+        val m = Regex("""(\d{1,2})\s*[./]\s*(\d{1,2})""").find(text) ?: return ""
         val d = m.groupValues[1].toInt()
         val mo = m.groupValues[2].toInt()
         val candidates = (today.year - 1..today.year + 1).mapNotNull {
@@ -149,7 +149,7 @@ object BakalariClient {
     }
 
     private fun weekdayOf(abbrev: String, fallback: Int) = when (abbrev.lowercase()) {
-        "po" -> 0; "út", "ut" -> 1; "st" -> 2; "čt", "ct" -> 3; "pá", "pa" -> 4
+        "po", "mon" -> 0; "út", "ut", "tue" -> 1; "st", "wed" -> 2; "čt", "ct", "thu" -> 3; "pá", "pa", "fri" -> 4
         else -> fallback
     }
 }

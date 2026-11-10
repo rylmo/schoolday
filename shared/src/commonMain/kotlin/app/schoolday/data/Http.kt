@@ -31,5 +31,11 @@ object Http {
 
     private val plain by lazy { HttpSession() }
 
-    suspend fun get(url: String): String = plain.get(url, mapOf("User-Agent" to userAgent)).body
+    /**
+     * The school's pages follow Accept-Language. iOS sends the phone's language on every request,
+     * which turned Bakaláři's dates into "10/11" and its change notes into English, and the parsers
+     * expect the Czech pages that Android gets.
+     */
+    suspend fun get(url: String): String =
+        plain.get(url, mapOf("User-Agent" to userAgent, "Accept-Language" to "cs-CZ,cs;q=0.9")).body
 }

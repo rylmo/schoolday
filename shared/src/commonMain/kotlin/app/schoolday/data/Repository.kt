@@ -53,8 +53,9 @@ class Repository(private val platform: Platform, val prefs: Prefs) {
         }
     }
 
+    // tt3: iPhones cached timetables without dates (English page), which a fresh copy must replace.
     fun cachedTimetable(classId: String, mode: TimetableMode): Timetable? =
-        readCache("tt2_${classId}_${mode.name}.json", Timetable.serializer())
+        readCache("tt3_${classId}_${mode.name}.json", Timetable.serializer())
 
     fun cachedLunch(): LunchMenu? = readCache("lunch.json", LunchMenu.serializer())
     fun cachedClasses(): List<SchoolClass>? = readCache("classes.json", ListSerializer(SchoolClass.serializer()))
@@ -62,7 +63,7 @@ class Repository(private val platform: Platform, val prefs: Prefs) {
     // ------------------------------------------------------------- timetable
 
     suspend fun timetable(classId: String, mode: TimetableMode, force: Boolean = false): Loaded<Timetable> =
-        load("tt2_${classId}_${mode.name}.json", Timetable.serializer(),
+        load("tt3_${classId}_${mode.name}.json", Timetable.serializer(),
             maxAgeMs = if (mode == TimetableMode.Permanent) 24 * HOUR else 20 * MIN,
             force = force, age = { it.fetchedAt }) { BakalariClient.timetable(classId, mode) }
 
