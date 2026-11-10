@@ -384,8 +384,8 @@ struct TimetableWidgetView: View {
                         .contentTransition(.opacity)
                     Spacer(minLength: 0)
                     if small, arrowsShown, let id = entry.classId {
-                        arrow("chevron.up", step: -Metrics.step, enabled: entry.canUp, classId: id, size: Metrics.headerArrow)
-                        arrow("chevron.down", step: Metrics.step, enabled: entry.canDown, classId: id, size: Metrics.headerArrow)
+                        arrow("chevron.up", step: -1, enabled: entry.canUp, classId: id, size: Metrics.headerArrow)
+                        arrow("chevron.down", step: 1, enabled: entry.canDown, classId: id, size: Metrics.headerArrow)
                     }
                 }
                 .frame(height: Metrics.headerHeight)
@@ -400,8 +400,8 @@ struct TimetableWidgetView: View {
             // Medium: bigger buttons, centred on the whole widget.
             if !small, arrowsShown, let id = entry.classId {
                 VStack(spacing: Metrics.sideArrowGap) {
-                    arrow("chevron.up", step: -Metrics.step, enabled: entry.canUp, classId: id, size: Metrics.sideArrow)
-                    arrow("chevron.down", step: Metrics.step, enabled: entry.canDown, classId: id, size: Metrics.sideArrow)
+                    arrow("chevron.up", step: -1, enabled: entry.canUp, classId: id, size: Metrics.sideArrow)
+                    arrow("chevron.down", step: 1, enabled: entry.canDown, classId: id, size: Metrics.sideArrow)
                 }
             }
         }
