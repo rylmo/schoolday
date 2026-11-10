@@ -24,21 +24,25 @@ private enum W {
 
 private enum Metrics {
     static let padding: CGFloat = 12
-    static let headerHeight: CGFloat = 22
+    /// The small widget's header holds its (bigger) buttons, so it is taller.
+    static func headerHeight(small: Bool) -> CGFloat { small ? 28 : 22 }
     static let headerGap: CGFloat = 6
-    static let smallRowHeight: CGFloat = 26
+    static let smallRowHeight: CGFloat = 34
     static let rowHeight: CGFloat = 30
     /// Each extra group in a merged row adds a detail line (medium only).
     static let extraLine: CGFloat = 13
     static let maxGroupLines = 3
     /// Small: two round buttons in the header. Medium: two bigger ones beside the rows.
-    static let headerArrow: CGFloat = 22
+    static let headerArrow: CGFloat = 28
     static let sideArrow: CGFloat = 30
     static let sideArrowGap: CGFloat = 10
     /// How far each arrow tap moves.
     static let step = 2
 
-    static func gap(small: Bool) -> CGFloat { small ? 3 : 4 }
+    static func gap(small: Bool) -> CGFloat { 4 }
+    /// Medium: how much of the next lesson may peek in below the last whole one.
+    static let peekOpacity = 0.55
+    static let peekBlur: CGFloat = 1.2
 
     static func height(_ row: LessonRow, small: Bool) -> CGFloat {
         small ? smallRowHeight : rowHeight + extraLine * CGFloat(min(row.parts.count, maxGroupLines) - 1)
@@ -249,6 +253,8 @@ struct TimetableEntry: TimelineEntry {
     /// Which way the rows slide in: -1 from the top (going up), +1 from the bottom.
     let direction: Int
     let offline: Bool
+    /// Height of the rows area, for the medium widget's fade at the bottom.
+    var rowsHeight: CGFloat = 0
 }
 
 struct TimetableProvider: AppIntentTimelineProvider {
@@ -300,7 +306,7 @@ struct TimetableProvider: AppIntentTimelineProvider {
 
         let small = context.family == .systemSmall
         let height = context.displaySize.height > 0 ? context.displaySize.height : 169
-        let budget = height - 2 * Metrics.padding - Metrics.headerHeight - Metrics.headerGap
+        let budget = height - 2 * Metrics.padding - Metrics.headerHeight(small: small) - Metrics.headerGap
 
         // now, and each lesson end today, so the widget moves on as lessons finish
         let todayKey = WidgetDates.key(now)
@@ -323,7 +329,8 @@ struct TimetableProvider: AppIntentTimelineProvider {
                 date: time, classId: cls.id, className: cls.name,
                 window: built.windows.isEmpty ? nil : built.windows[index],
                 canUp: index > 0, canDown: index < built.windows.count - 1,
-                direction: time == now ? direction : 1, offline: offline
+                direction: time == now ? direction : 1, offline: offline,
+                rowsHeight: budget
             )
         }
     }
@@ -377,7 +384,7 @@ struct TimetableWidgetView: View {
                 // Small: the buttons sit in the header, out of the lessons' way.
                 HStack(spacing: 6) {
                     Text(dayTitle)
-                        .font(.system(size: small ? 11 : 12, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(palette.text)
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
@@ -388,7 +395,7 @@ struct TimetableWidgetView: View {
                         arrow("chevron.down", step: 1, enabled: entry.canDown, classId: id, size: Metrics.headerArrow)
                     }
                 }
-                .frame(height: Metrics.headerHeight)
+                .frame(height: Metrics.headerHeight(small: small))
                 HStack(spacing: 8) {
                     content
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -440,10 +447,13 @@ struct TimetableWidgetView: View {
                         .overlay(alignment: .top) {
                             VStack(spacing: Metrics.gap(small: small)) {
                                 ForEach(Array(window.rows.enumerated()), id: \.element.start) { index, row in
+                                    let shown = index >= window.first && index < window.first + window.count
+                                    let peeking = !small && index == window.first + window.count
                                     Group {
                                         if small { SmallRow(row: row, palette: palette) } else { MediumRow(row: row, palette: palette) }
                                     }
-                                    .opacity(index >= window.first && index < window.first + window.count ? 1 : 0)
+                                    .blur(radius: peeking ? Metrics.peekBlur : 0)
+                                    .opacity(shown ? 1 : (peeking ? Metrics.peekOpacity : 0))
                                 }
                             }
                             .fixedSize(horizontal: false, vertical: true)
@@ -452,6 +462,8 @@ struct TimetableWidgetView: View {
                             .animation(.smooth(duration: 0.4), value: window.first)
                         }
                         .clipped()
+                        // Medium: whatever is below the last whole lesson fades out towards the edge.
+                        .mask { if small { Rectangle() } else { peekFade(window) } }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -471,6 +483,18 @@ struct TimetableWidgetView: View {
                 }
             }
         }
+    }
+
+    /// Opaque down to the end of the last whole lesson, then fading to nothing at the bottom edge.
+    private func peekFade(_ window: Window) -> some View {
+        let shownHeight = window.rows.dropFirst(window.first).prefix(window.count).enumerated()
+            .reduce(CGFloat(0)) { $0 + Metrics.height($1.element, small: false) + ($1.offset > 0 ? Metrics.gap(small: false) : 0) }
+        let total = max(entry.rowsHeight, 1)
+        let solid = min(max(shownHeight / total, 0), 1)
+        return LinearGradient(
+            stops: [.init(color: .black, location: 0), .init(color: .black, location: solid), .init(color: .clear, location: 1)],
+            startPoint: .top, endPoint: .bottom
+        )
     }
 
     private func message(_ text: String) -> some View {
@@ -506,7 +530,7 @@ struct TimetableWidgetView: View {
 
     private var dayTitle: String {
         var title = dayLabel
-        if let short = shortDate { title += small ? " \(short)" : " (\(short))" }
+        if !small, let short = shortDate { title += " (\(short))" }
         if !small, let name = entry.className, entry.window != nil { title = "\(name) · " + title }
         if entry.offline { title += " · " + W.offline }
         return title
@@ -583,19 +607,19 @@ private struct SmallRow: View {
                 .widgetAccentable()
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
-                    Text(row.period).font(.system(size: 10, weight: .bold))
-                    Text(hm(row.start)).font(.system(size: 10, weight: .medium).monospacedDigit())
+                    Text(row.period).font(.system(size: 11, weight: .bold))
+                    Text(hm(row.start)).font(.system(size: 11, weight: .medium).monospacedDigit())
                 }
                 .foregroundStyle(row.changed ? palette.accent : palette.secondary)
                 .widgetAccentable()
                 HStack(spacing: 4) {
                     Text(row.abbrev)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(palette.text)
                         .strikethrough(row.cancelled)
                         .layoutPriority(1)
                     Text(row.rooms)
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundStyle(palette.secondary)
                 }
                 .lineLimit(1)
@@ -604,7 +628,7 @@ private struct SmallRow: View {
         }
         .frame(height: Metrics.smallRowHeight)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(row.changed ? palette.changedRow : palette.row)
         )
         .opacity(row.cancelled ? 0.6 : 1)
