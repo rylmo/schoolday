@@ -398,10 +398,11 @@ struct TimetableWidgetView: View {
                     }
                 }
             }
-            // Each tap slides the rows in from the side it moves towards, with a little bounce.
+            // Each tap slides the rows in from the side it moves towards. `.smooth` is a critically
+            // damped spring: it eases like one but never overshoots and bounces back.
             .id(window.key)
             .transition(.push(from: entry.direction < 0 ? .top : .bottom))
-            .animation(.spring(response: 0.45, dampingFraction: 0.74), value: window.key)
+            .animation(.smooth(duration: 0.4), value: window.key)
         } else {
             VStack(spacing: 4) {
                 message(W.cantLoad)
