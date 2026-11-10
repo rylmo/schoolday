@@ -253,7 +253,7 @@ enum WidgetCache {
 
     /// Days the user flipped to with the arrows. It falls back to automatic after a while.
     /// How long a scrolled position stays before the widget goes back to the current lesson.
-    static let manualHold: TimeInterval = 20 * 60
+    static let manualHold: TimeInterval = 5 * 60
 
     static func offset(_ classId: String, now: Date = Date()) -> Int {
         guard let set = defaults.object(forKey: "offsetAt.\(classId)") as? Date,
