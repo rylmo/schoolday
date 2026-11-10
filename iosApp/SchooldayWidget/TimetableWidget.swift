@@ -339,7 +339,8 @@ struct TimetableProvider: AppIntentTimelineProvider {
             LessonRow(period: "2", start: 530, end: 575, parts: [
                 WidgetLesson(period: "2", start: 530, end: 575, subject: "Základy elektrotechniky", abbrev: "ZET", detail: "V311 · Ing. Evžen Žabčík", room: "V311", changed: true, cancelled: false),
             ]),
-        ]
+        ],
+        count: 2
     )
 }
 
