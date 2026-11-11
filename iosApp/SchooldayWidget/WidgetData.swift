@@ -195,6 +195,6 @@ struct DayReading {
 }
 
 extension LessonRow {
-    /// Short subject name for small spaces ("ANJ"), with "!" when the lesson changed.
-    var shortName: String { abbrev + (changed ? " !" : "") }
+    /// Short subject name for small spaces ("ANJ").
+    var shortName: String { abbrev }
 }

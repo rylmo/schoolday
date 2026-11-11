@@ -2,8 +2,8 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-// Lock Screen widgets. iOS draws these in white over the wallpaper, so a changed lesson is
-// marked "!" (LessonRow.shortName) instead of pink.
+// Lock Screen widgets. iOS draws these in white over the wallpaper, so they don't mark changed
+// lessons (pink on the Home Screen widget).
 
 extension W {
     static var breakShort: String { t("BREAK", "PŘEST.") }

@@ -355,7 +355,7 @@ private struct Palette {
     let fullColor: Bool
     let dark: Bool
 
-    var background: Color { dark ? Color(red: 0.165, green: 0.173, blue: 0.192) : Color(red: 0.95, green: 0.95, blue: 0.96) }
+    var background: Color { dark ? Color(red: 0.13, green: 0.137, blue: 0.153) : Color(red: 0.925, green: 0.925, blue: 0.937) }
     var row: Color { fullColor ? (dark ? Color.black.opacity(0.24) : Color.black.opacity(0.05)) : Color.primary.opacity(0.1) }
     var pink: Color { dark ? Color(red: 0.94, green: 0.33, blue: 0.53) : Color(red: 0.85, green: 0.11, blue: 0.38) }
     var changedRow: Color { fullColor ? pink.opacity(dark ? 0.2 : 0.12) : Color.primary.opacity(0.16) }
