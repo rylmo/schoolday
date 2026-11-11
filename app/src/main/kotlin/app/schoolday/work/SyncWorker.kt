@@ -17,13 +17,15 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Background refresh: your own class (for lunch detection), the shown classes and the lunch menu.
- * Everything lands in the offline cache, then today's lunch notification is (re)scheduled.
+ * Everything lands in the offline cache, then the next lunch notification is (re)scheduled.
  */
 class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext.app
         val s = app.prefs.value
         app.repo.timetable(s.myClass, TimetableMode.Actual, force = true)
+        // Next week too, so Monday's lunch alarm can be set on Friday or at the weekend.
+        app.repo.timetable(s.myClass, TimetableMode.Next)
         s.shownClasses.forEach { app.repo.timetable(it, TimetableMode.Actual, force = true) }
         app.repo.lunch(force = true)
         LunchNotifier.reschedule(applicationContext)

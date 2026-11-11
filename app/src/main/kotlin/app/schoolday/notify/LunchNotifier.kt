@@ -14,48 +14,76 @@ import androidx.core.content.ContextCompat
 import app.schoolday.R
 import app.schoolday.app
 import app.schoolday.data.TimetableMode
+import app.schoolday.logic.AFTER_SCHOOL_LEAD
 import app.schoolday.logic.LunchWindow
 import app.schoolday.logic.day
+import app.schoolday.logic.hm
 import app.schoolday.logic.lunchWindow
 import app.schoolday.logic.myMeal
 import app.schoolday.logic.nowMinutes
 import app.schoolday.logic.shortDish
 import app.schoolday.ui.MainActivity
+import app.schoolday.ui.S
 import app.schoolday.work.SyncWorker
 import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Silent notification showing today's lunch during your lunch break.
- *  - lunch gap in your timetable → visible for the whole gap
- *  - lunch after the last lesson → from 10 min before the end until 5 min after
+ * Quiet notification with today's lunch, posted 10 minutes before lunch so you see it in time.
+ *  - lunch gap in your timetable → from 10 min before the gap until it ends
+ *  - lunch after the last lesson → from 10 min before school ends until 5 min after
+ * It never makes a sound or vibrates, can be swiped away, and disappears when lunch is over.
  */
 object LunchNotifier {
-    private const val CHANNEL = "lunch"
+    /** Version 1.21 and older used "lunch" (low importance, so Samsung filed it under Silent). */
+    private const val OLD_CHANNEL = "lunch"
+    private const val CHANNEL = "lunch_quiet"
     private const val NOTIF_ID = 1001
+    private const val LEAD_MINUTES = 10
     const val EXTRA_OPEN = "open"
     const val OPEN_LUNCH_TODAY = "lunch_today"
 
     fun createChannel(ctx: Context) {
-        val ch = NotificationChannel(CHANNEL, app.schoolday.ui.S.channelName, NotificationManager.IMPORTANCE_LOW).apply {
-            description = app.schoolday.ui.S.channelDesc
+        // Normal importance so it's listed with your other notifications and shows in the status
+        // bar, but with no sound and no vibration. Below "high", so it never pops up over the screen.
+        val ch = NotificationChannel(CHANNEL, S.channelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = S.channelDesc
             setSound(null, null)
             enableVibration(false)
+            vibrationPattern = null
+            enableLights(false)
             setShowBadge(false)
         }
-        ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
+        val nm = ctx.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(ch)
+        nm.deleteNotificationChannel(OLD_CHANNEL)
     }
 
-    private fun todayWindow(ctx: Context): LunchWindow? {
-        val s = ctx.app.prefs.value
-        val tt = ctx.app.repo.cachedTimetable(s.myClass, TimetableMode.Actual) ?: return null
-        return tt.day(LocalDate.now())?.lunchWindow()
+    /** When lunch itself begins: the start of the break, or the end of school. */
+    private val LunchWindow.lunchStart: Int get() = if (afterSchool) start + AFTER_SCHOOL_LEAD else start
+
+    /** When the notification appears. */
+    private val LunchWindow.notifyAt: Int get() = lunchStart - LEAD_MINUTES
+
+    private fun LunchWindow.text(): String =
+        if (afterSchool) S.lunchAfterSchoolFrom(lunchStart.hm()) else S.lunchSpan(start.hm(), end.hm())
+
+    /** Your lunch window on [date], from the saved timetables (this week's, then next week's). */
+    private fun windowOn(ctx: Context, date: LocalDate): LunchWindow? {
+        val myClass = ctx.app.prefs.value.myClass
+        return listOf(TimetableMode.Actual, TimetableMode.Next)
+            .firstNotNullOfOrNull { ctx.app.repo.cachedTimetable(myClass, it)?.day(date) }
+            ?.lunchWindow()
     }
 
-    private fun millisAt(minutes: Int): Long =
-        LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() + minutes * 60_000L
+    private fun millisAt(date: LocalDate, minutes: Int): Long =
+        date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() + minutes * 60_000L
 
-    /** Called after every sync, on boot and when the app opens. */
+    /**
+     * Shows the notification if it's due now, and sets the alarm for the next one (later today or
+     * on a coming school day). Called after every sync, on boot, when the app opens and when the
+     * alarm fires.
+     */
     fun reschedule(ctx: Context) {
         val am = ctx.getSystemService(AlarmManager::class.java)
         val pi = alarmIntent(ctx)
@@ -63,13 +91,19 @@ object LunchNotifier {
         if (!ctx.app.prefs.value.lunchNotification) {
             cancel(ctx); return
         }
-        val w = todayWindow(ctx) ?: return
+        val today = LocalDate.now()
         val now = nowMinutes()
-        when {
-            now >= w.end -> Unit
-            now >= w.start -> show(ctx, w)
-            else -> am.setWindow(AlarmManager.RTC_WAKEUP, millisAt(w.start), 60_000L, pi)
-        }
+        windowOn(ctx, today)?.let { w -> if (now >= w.notifyAt && now < w.end) show(ctx, w) }
+
+        val next = (0L..7L).asSequence()
+            .map { today.plusDays(it) }
+            .firstNotNullOfOrNull { d -> windowOn(ctx, d)?.takeIf { d != today || now < it.notifyAt }?.let { d to it } }
+            ?: return
+        val at = millisAt(next.first, next.second.notifyAt)
+        // Exact and allowed while idle: an ordinary alarm can arrive half an hour late on a phone
+        // lying still in a bag, after lunch is already over.
+        if (am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
     }
 
     private fun alarmIntent(ctx: Context) = PendingIntent.getBroadcast(
@@ -86,24 +120,28 @@ object LunchNotifier {
     fun show(ctx: Context, w: LunchWindow, force: Boolean = false) {
         if (!force && shownToday(ctx)) return
         val title = mealTitle(ctx) ?: return
-        val remainingMs = (millisAt(w.end) - System.currentTimeMillis()).coerceAtLeast(60_000L)
-        post(ctx, title, remainingMs)
+        post(ctx, title, w.text(), until = millisAt(LocalDate.now(), w.end))
         markShown(ctx)
     }
 
     /** Text for the notification, or null when iCanteen says no lunch is ordered today. */
     private fun mealTitle(ctx: Context): String? {
-        val menu = ctx.app.repo.cachedLunch() ?: return app.schoolday.ui.S.notifFallback
-        val day = menu.day(LocalDate.now()) ?: return app.schoolday.ui.S.notifFallback
+        val menu = ctx.app.repo.cachedLunch() ?: return S.notifFallback
+        val day = menu.day(LocalDate.now()) ?: return S.notifFallback
         val (meal, _) = menu.myMeal(day) ?: return null
         return shortDish(meal.name)
     }
 
+    /** A 2-minute preview (long-press "Lunch notification" in Settings), with today's lunch times if any. */
     fun showTest(ctx: Context) {
-        post(ctx, mealTitle(ctx) ?: "No lunch ordered today", 2 * 60_000L)
+        post(
+            ctx, mealTitle(ctx) ?: S.notifFallback, windowOn(ctx, LocalDate.now())?.text(),
+            until = System.currentTimeMillis() + 2 * 60_000L,
+        )
     }
 
-    private fun post(ctx: Context, title: String, timeoutMs: Long) {
+    /** Posts the notification; it removes itself at [until]. */
+    private fun post(ctx: Context, title: String, text: String?, until: Long) {
         // Android 13+ needs the runtime permission; on 12 notifications are on unless the user blocked them.
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -119,13 +157,16 @@ object LunchNotifier {
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
+            .setContentText(text)
             .setColor(0xFFFFB86B.toInt())
             .setContentIntent(open)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setTimeoutAfter(timeoutMs)
+            .setDefaults(0)
+            .setVibrate(null)
+            .setSound(null)
+            .setTimeoutAfter((until - System.currentTimeMillis()).coerceAtLeast(60_000L))
             .build()
         NotificationManagerCompat.from(ctx).notify(NOTIF_ID, n)
     }
@@ -134,13 +175,8 @@ object LunchNotifier {
 }
 
 class LunchReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val s = context.app.prefs.value
-        if (!s.lunchNotification) return
-        val tt = context.app.repo.cachedTimetable(s.myClass, TimetableMode.Actual) ?: return
-        val w = tt.day(LocalDate.now())?.lunchWindow() ?: return
-        if (nowMinutes() < w.end) LunchNotifier.show(context, w)
-    }
+    /** Shows today's notification and sets the alarm for the next lunch. */
+    override fun onReceive(context: Context, intent: Intent) = LunchNotifier.reschedule(context)
 }
 
 class BootReceiver : BroadcastReceiver() {

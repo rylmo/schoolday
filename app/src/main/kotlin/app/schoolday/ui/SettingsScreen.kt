@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.schoolday.notify.LunchNotifier
 import app.schoolday.data.SchoolClass
 import app.schoolday.ui.theme.AppTheme
 import app.schoolday.ui.theme.Ic
@@ -88,7 +89,7 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
             }
 
             Section(S.app) {
-                SettingRow(S.lunchNotification, S.lunchNotificationSub) {
+                SettingRow(S.lunchNotification, S.lunchNotificationSub, onLongClick = { LunchNotifier.showTest(ctx) }) {
                     Toggle(settings.lunchNotification) { v -> vm.updateSettings { it.copy(lunchNotification = v) } }
                 }
                 val theme = AppTheme.of(settings.theme)

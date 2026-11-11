@@ -1,5 +1,9 @@
 package app.schoolday.ui
 
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -133,9 +137,23 @@ fun Toggle(checked: Boolean, onChange: (Boolean) -> Unit) {
 
 /** A row with title + optional subtitle and something on the right. */
 @Composable
-fun SettingRow(title: String, subtitle: String? = null, onClick: (() -> Unit)? = null, trailing: @Composable RowScope.() -> Unit = {}) {
+fun SettingRow(
+    title: String, subtitle: String? = null, onClick: (() -> Unit)? = null, onLongClick: (() -> Unit)? = null,
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
+    val haptics = LocalHapticFeedback.current
+    val press = when {
+        onLongClick != null -> Modifier.combinedClickable(
+            interactionSource = null,
+            indication = if (onClick != null) LocalIndication.current else null,
+            onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onLongClick() },
+            onClick = onClick ?: {},
+        )
+        onClick != null -> Modifier.clickable(onClick = onClick)
+        else -> Modifier
+    }
     Row(
-        Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        Modifier.fillMaxWidth().then(press)
             .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

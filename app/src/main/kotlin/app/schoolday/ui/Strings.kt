@@ -57,7 +57,7 @@ open class Strings(val locale: Locale) {
     // Settings
     open val iCanteen = "iCanteen"; open fun remove(what: String) = "Remove $what"; open val addClass = "Add class"
     open val yourClass = "Your class"; open val yourClassSub = "Finds your lunch break"
-    open val app = "App"; open val lunchNotification = "Lunch notification"; open val lunchNotificationSub = "During your lunch break"
+    open val app = "App"; open val lunchNotification = "Lunch notification"; open val lunchNotificationSub = "10 minutes before lunch"
     open val colours = "Colours"; open val dark = "Dark"; open val light = "Light"; open val language = "Language"
     open val help = "Help"; open val copyDebug = "Copy debug info"; open val copyDebugSub = "For reporting a problem"; open val copied = "Copied – paste it to whoever is helping you"
     open fun footer(v: String) = "Schoolday $v · unofficial student app, not affiliated with SŠIEŘ Rožnov p. R. " +
@@ -95,7 +95,7 @@ open class Strings(val locale: Locale) {
     open fun versionLabel(v: String) = "Version $v"
 
     // notification
-    open val channelName = "Lunch break"; open val channelDesc = "Shows today's lunch during your lunch break"; open val notifFallback = "Lunch"
+    open val channelName = "Lunch break"; open val channelDesc = "Shows your lunch 10 minutes before lunch, without sound or vibration"; open val notifFallback = "Lunch"; open fun lunchSpan(a: String, b: String) = "Lunch break $a – $b"; open fun lunchAfterSchoolFrom(t: String) = "Lunch after school, from $t"
 
     // dates
     open fun dayName(d: LocalDate): String = d.dayOfWeek.getDisplayName(TextStyle.FULL, locale).replaceFirstChar { it.titlecase(locale) }
@@ -150,7 +150,7 @@ object Czech : Strings(Locale.forLanguageTag("cs")) {
 
     override fun remove(what: String) = "Odebrat $what"; override val addClass = "Přidat třídu"
     override val yourClass = "Tvoje třída"; override val yourClassSub = "Podle ní se hledá tvůj oběd"
-    override val app = "Aplikace"; override val lunchNotification = "Oznámení o obědě"; override val lunchNotificationSub = "Během tvé polední pauzy"
+    override val app = "Aplikace"; override val lunchNotification = "Oznámení o obědě"; override val lunchNotificationSub = "10 minut před obědem"
     override val colours = "Barvy"; override val dark = "Tmavé"; override val light = "Světlé"; override val language = "Jazyk"
     override val help = "Pomoc"; override val copyDebug = "Zkopírovat ladicí informace"; override val copyDebugSub = "Pro nahlášení problému"; override val copied = "Zkopírováno – pošli to tomu, kdo ti pomáhá"
     override fun footer(v: String) = "Schoolday $v · neoficiální studentská aplikace, není spojená se SŠIEŘ Rožnov p. R. " +
@@ -184,7 +184,7 @@ object Czech : Strings(Locale.forLanguageTag("cs")) {
     override val checkUpdates = "Zkontrolovat aktualizace"; override val checkingUpdates = "Kontroluji…"; override val upToDate = "Máš nejnovější verzi"
     override fun versionLabel(v: String) = "Verze $v"
 
-    override val channelName = "Polední pauza"; override val channelDesc = "Ukazuje dnešní oběd během polední pauzy"; override val notifFallback = "Oběd"
+    override val channelName = "Polední pauza"; override val channelDesc = "Ukáže tvůj oběd 10 minut před obědem, bez zvuku a vibrací"; override val notifFallback = "Oběd"; override fun lunchSpan(a: String, b: String) = "Polední pauza $a – $b"; override fun lunchAfterSchoolFrom(t: String) = "Oběd po škole, od $t"
 
     override fun monthDay(d: LocalDate): String = d.format(DateTimeFormatter.ofPattern("d. MMMM", locale))
 }
