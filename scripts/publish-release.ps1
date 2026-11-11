@@ -43,6 +43,10 @@ $json = @{
 # No byte-order mark: the app parses this file as plain JSON.
 [IO.File]::WriteAllText((Join-Path (Get-Location) $manifest), $json, (New-Object Text.UTF8Encoding $false))
 
-& $gh release create $tag $apk $manifest --repo $repo --target main --title "Schoolday $name" --notes "$Notes" --latest
+# Notes go through a file: Windows PowerShell splits arguments that contain double quotes.
+$notesFile = Join-Path (Get-Location) (Join-Path $out "notes.md")
+[IO.File]::WriteAllText($notesFile, $Notes, (New-Object Text.UTF8Encoding $false))
+
+& $gh release create $tag $apk $manifest --repo $repo --target main --title "Schoolday $name" --notes-file $notesFile --latest
 if ($LASTEXITCODE -ne 0) { throw "Publishing failed" }
 Write-Host "Published Schoolday $name (versionCode $code)"
