@@ -22,7 +22,6 @@ class SettingsSnapshot(
     val addableClasses: List<SettingsOption>,
     val allClasses: List<SettingsOption>,
     val myClass: String,
-    val showMyClass: Boolean,
     val theme: String,
     val themes: List<SettingsOption>,
     val language: String,
@@ -64,7 +63,6 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
             addableClasses = classes.filter { it.id !in s.shownClasses && it.id != s.myClass }.map { SettingsOption(it.id, it.name) },
             allClasses = classes.map { SettingsOption(it.id, it.name) },
             myClass = s.myClass,
-            showMyClass = s.showMyClass,
             theme = s.theme,
             themes = AppTheme.entries.map { t ->
                 SettingsOption(
@@ -92,7 +90,6 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
         )
     }
 
-    fun updateShowMyClass(on: Boolean) = vm.updateSettings { it.copy(showMyClass = on) }
     fun updateTheme(key: String) = vm.updateSettings { it.copy(theme = key) }
     fun updateLanguage(key: String) = vm.updateSettings { it.copy(lang = key) }
     fun updateMyClass(key: String) = vm.updateSettings { it.copy(myClass = key, shownClasses = it.shownClasses - key) }

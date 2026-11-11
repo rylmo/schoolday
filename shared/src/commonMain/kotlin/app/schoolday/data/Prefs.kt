@@ -14,7 +14,6 @@ data class Settings(
     /** Your own class – used to find your lunch break and for "same as you". */
     val myClass: String = DEFAULT_MY_CLASS,
     /** Also show your own class's timetable in the Timetable tab. */
-    val showMyClass: Boolean = false,
     val lunchNotification: Boolean = true,
     /** Colour theme id, see AppTheme. */
     val theme: String = "midnight",
@@ -43,7 +42,6 @@ class Prefs(private val kv: KeyValues, private val secure: SecureStore) {
         icPass = secure.get(PASSWORD) ?: "",
         shownClasses = kv.getString("shownClasses")?.split(',')?.filter { it.isNotBlank() } ?: Settings().shownClasses,
         myClass = kv.getString("myClass") ?: Settings.DEFAULT_MY_CLASS,
-        showMyClass = kv.getBoolean("showMyClass", false),
         lunchNotification = kv.getBoolean("lunchNotification", true),
         theme = kv.getString("theme") ?: if (kv.getBoolean("systemColors", false)) "system" else "midnight",
         // Anyone upgrading from 1.0 already set the app up.
@@ -57,7 +55,6 @@ class Prefs(private val kv: KeyValues, private val secure: SecureStore) {
         kv.putString("icUser", s.icUser)
         kv.putString("shownClasses", s.shownClasses.joinToString(","))
         kv.putString("myClass", s.myClass)
-        kv.putBoolean("showMyClass", s.showMyClass)
         kv.putBoolean("lunchNotification", s.lunchNotification)
         kv.putString("theme", s.theme)
         kv.putBoolean("onboarded", s.onboarded)

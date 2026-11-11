@@ -187,7 +187,6 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.menu)
-            Toggle(text.showMyClass, isOn: Binding(get: { snap.showMyClass }, set: { bridge.updateShowMyClass(on: $0) }))
         } header: {
             Text(text.classes)
         }

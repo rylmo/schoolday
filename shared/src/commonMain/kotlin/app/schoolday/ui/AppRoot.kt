@@ -169,7 +169,13 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var lunchSheetDate by rememberSaveable { mutableStateOf<String?>(null) }
     val settings by vm.settings.collectAsState()
-    var selectedClass by rememberSaveable { mutableStateOf(settings.shownClasses.firstOrNull() ?: settings.myClass) }
+    // The Timetable tab shows your own class unless you came from another class on Today
+    // (or from the widget); picking the tab itself always goes back to yours.
+    var selectedClass by rememberSaveable { mutableStateOf(settings.myClass) }
+    fun selectTab(next: Tab) {
+        if (next == Tab.Timetable && tab != Tab.Timetable) selectedClass = settings.myClass
+        tab = next
+    }
     var backProgress by remember { mutableFloatStateOf(0f) }
     /** A day the Timetable tab should jump to (from the iOS widget), until it has. */
     var timetableDate by remember { mutableStateOf<String?>(null) }
@@ -205,7 +211,7 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
 
     if (chrome != null) {
         DisposableEffect(chrome) {
-            chrome.selectTab = { i -> tab = Tab.entries[i] }
+            chrome.selectTab = { i -> selectTab(Tab.entries[i]) }
             chrome.goBack = { showSettings = false }
             chrome.showSettings = { showSettings = true }
             onDispose { chrome.selectTab = {}; chrome.goBack = {}; chrome.showSettings = {} }
@@ -250,7 +256,7 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
                 NavBar(
                     listOf(S.today to Ic.Today, S.timetable to Ic.Timetable, S.lunch to Ic.Lunch),
                     tab.ordinal,
-                ) { tab = Tab.entries[it] }
+                ) { selectTab(Tab.entries[it]) }
             }
         }
 
