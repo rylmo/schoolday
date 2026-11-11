@@ -50,6 +50,10 @@ class IntroState(val willPlay: Boolean) {
     val segs = mutableStateMapOf<Int, List<StripSeg>>()
     var finished by mutableStateOf(!willPlay)
     val targetsReady get() = fork != null && strips.isNotEmpty()
+
+    /** Set when the app was opened to show something specific (the iOS widget): the animation
+     *  morphs into Today, so it fades away instead of playing over another screen. */
+    var cancelled by mutableStateOf(false)
 }
 
 // Same geometry as res/drawable/splash_icon.xml: the 160-unit glyph drawn in a 128dp box at screen centre.
@@ -76,6 +80,14 @@ fun IntroOverlay(state: IntroState) {
     val t = remember { Animatable(0f) }
     var skip by remember { mutableStateOf(false) }
     val fade = remember { Animatable(1f) }
+
+    LaunchedEffect(state.cancelled) {
+        if (!state.cancelled || state.finished) return@LaunchedEffect
+        Diag.intro = "skipped: opened from a link"
+        skip = true
+        fade.animateTo(0f, tween(180))
+        state.finished = true
+    }
 
     LaunchedEffect(Unit) {
         // 1. wait (briefly) for the Today screen underneath to be laid out

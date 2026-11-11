@@ -1,0 +1,39 @@
+# Makes the newest test build the stable iPhone release: copies the .ipa from "ios-testing"
+# to "ios-test", which testers' phones (Settings › Test builds off) and the Windows setup use.
+# Run it from the Actions tab (Promote iOS test build › Run workflow), or: gh workflow run ios-promote.yml
+name: Promote iOS test build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-promote
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy the newest test build to the stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release download ios-testing -R "$REPO" -p Schoolday-iOS.ipa -p ios-update.json
+          BUILD=$(jq -r .versionCode ios-update.json)
+          VERSION=$(jq -r .marketingVersion ios-update.json)
+          SHA=$(jq -r .sha256 ios-update.json)
+          TARGET=$(gh release view ios-testing -R "$REPO" --json targetCommitish -q .targetCommitish)
+          jq -n --argjson code "$BUILD" --arg version "$VERSION" \
+            --arg url "https://github.com/$REPO/releases/download/ios-test/Schoolday-iOS.ipa" --arg sha "$SHA" \
+            '{versionCode: $code, versionName: "\($version) (\($code))", marketingVersion: $version, url: $url, sha256: $sha}' > stable.json
+          mv stable.json ios-update.json
+          cat ios-update.json
+          gh release delete ios-test -R "$REPO" --yes --cleanup-tag || true
+          gh release create ios-test Schoolday-iOS.ipa ios-update.json -R "$REPO" \
+            --latest=false --target "$TARGET" \
+            --title "Schoolday for iPhone" \
+            --notes "Schoolday $VERSION ($BUILD) for iPhone. Install it with the Windows setup (https://github.com/$REPO/releases/tag/ios-setup); the app offers newer versions itself."

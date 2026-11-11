@@ -65,6 +65,12 @@ struct SettingsView: View {
             classesSection(snap)
             appSection(snap)
             Section {
+                Toggle(isOn: Binding(get: { snap.testBuilds }, set: { bridge.updateTestBuilds(on: $0) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(text.testBuilds)
+                        Text(text.testBuildsSub).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
                 HStack(spacing: 12) {
                     Button { bridge.checkForUpdates() } label: {
                         VStack(alignment: .leading, spacing: 2) {

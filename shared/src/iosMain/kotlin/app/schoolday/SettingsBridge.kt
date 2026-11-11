@@ -30,6 +30,7 @@ class SettingsSnapshot(
     /** "Checking…", "You're on the latest version", "Version 1.2 (58) is available", or the error. */
     val updateStatus: String,
     val updateAvailable: Boolean,
+    val testBuilds: Boolean,
 )
 
 /** Implemented by the SwiftUI Settings screen. */
@@ -73,6 +74,7 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
                 )
             },
             language = s.lang,
+            testBuilds = s.testBuilds,
             languages = listOf(
                 SettingsOption("system", S.langSystem),
                 SettingsOption("cs", "Čeština"),
@@ -92,6 +94,12 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
 
     fun updateTheme(key: String) = vm.updateSettings { it.copy(theme = key) }
     fun updateLanguage(key: String) = vm.updateSettings { it.copy(lang = key) }
+
+    /** Switches between test builds and the stable release, then looks for what the new choice offers. */
+    fun updateTestBuilds(on: Boolean) {
+        vm.updateSettings { it.copy(testBuilds = on) }
+        vm.checkForUpdate(manual = true)
+    }
     fun updateMyClass(key: String) = vm.updateSettings { it.copy(myClass = key, shownClasses = it.shownClasses - key) }
     fun addClass(key: String) = vm.updateSettings { it.copy(shownClasses = it.shownClasses + key) }
     fun removeClass(key: String) = vm.updateSettings { it.copy(shownClasses = it.shownClasses - key) }

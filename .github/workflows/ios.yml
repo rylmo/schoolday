@@ -1,5 +1,8 @@
 # Builds an unsigned iPhone app (.ipa) that SideStore can sign and install.
-# The result is attached to the "ios-test" pre-release, which never affects Android updates.
+# Every push is a TEST build, published to the "ios-testing" pre-release; only phones with
+# Settings › Test builds on are offered it. The stable "ios-test" release (what testers and
+# the Windows setup get) changes only through the "Promote iOS test build" workflow.
+# Neither is marked latest, so Android's updater (releases/latest) never sees them.
 name: iOS build
 
 on:
@@ -60,11 +63,13 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/Schoolday.app Payload/
           zip -qry Schoolday-iOS.ipa Payload
           ls -la Schoolday-iOS.ipa
-          # The app compares versionCode with its own build number to offer updates.
+          # The app compares versionCode with its own build number to offer updates;
+          # marketingVersion lets the promote workflow name the stable copy.
           VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Payload/Schoolday.app/Info.plist)
           SHA=$(shasum -a 256 Schoolday-iOS.ipa | cut -d' ' -f1)
-          printf '{"versionCode":%s,"versionName":"%s (%s)","url":"https://github.com/%s/releases/download/ios-test/Schoolday-iOS.ipa","sha256":"%s"}\n' \
-            "${{ github.run_number }}" "$VERSION" "${{ github.run_number }}" "$GITHUB_REPOSITORY" "$SHA" > ios-update.json
+          jq -n --argjson code "${{ github.run_number }}" --arg version "$VERSION" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/releases/download/ios-testing/Schoolday-iOS.ipa" --arg sha "$SHA" \
+            '{versionCode: $code, versionName: "\($version) · test \($code)", marketingVersion: $version, url: $url, sha256: $sha}' > ios-update.json
           cat ios-update.json
 
       - name: Publish test build
@@ -72,8 +77,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete ios-test --yes --cleanup-tag || true
-          gh release create ios-test Schoolday-iOS.ipa ios-update.json \
+          gh release delete ios-testing --yes --cleanup-tag || true
+          gh release create ios-testing Schoolday-iOS.ipa ios-update.json \
             --prerelease --latest=false --target "$GITHUB_SHA" \
-            --title "Schoolday for iPhone (experimental)" \
-            --notes "Unsigned test build for SideStore. Built from $GITHUB_SHA."
+            --title "Schoolday for iPhone: test build ${{ github.run_number }}" \
+            --notes "Test build for phones with Settings › Test builds turned on. Built from $GITHUB_SHA. Run the \"Promote iOS test build\" workflow to make it the stable release."

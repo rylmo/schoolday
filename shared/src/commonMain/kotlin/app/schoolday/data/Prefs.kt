@@ -21,6 +21,8 @@ data class Settings(
     val onboarded: Boolean = false,
     /** "system", "en" or "cs". */
     val lang: String = "system",
+    /** iPhone: be offered test builds, not just the stable release. */
+    val testBuilds: Boolean = false,
 ) {
     val hasICanteen get() = icUser.isNotBlank() && icPass.isNotBlank()
 
@@ -47,6 +49,7 @@ class Prefs(private val kv: KeyValues, private val secure: SecureStore) {
         // Anyone upgrading from 1.0 already set the app up.
         onboarded = kv.getBoolean("onboarded", kv.contains("myClass")),
         lang = kv.getString("lang") ?: "system",
+        testBuilds = kv.getBoolean("testBuilds", false),
     )
 
     fun update(block: (Settings) -> Settings) {
@@ -59,6 +62,7 @@ class Prefs(private val kv: KeyValues, private val secure: SecureStore) {
         kv.putString("theme", s.theme)
         kv.putBoolean("onboarded", s.onboarded)
         kv.putString("lang", s.lang)
+        kv.putBoolean("testBuilds", s.testBuilds)
         _state.value = s
     }
 

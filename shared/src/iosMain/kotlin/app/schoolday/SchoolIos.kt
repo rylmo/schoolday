@@ -39,13 +39,18 @@ private class IosPlatform(override val secureStore: SecureStore, installer: Upda
         "$base/cache".also { NSFileManager.defaultManager.createDirectoryAtPath(it, true, null, null) }
     }
 
+    /** "1.2 (31)" on the stable release, "1.2 · test 31" with Settings › Test builds on. */
     override val versionName: String
-        get() = "${NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "?"} ($buildNumber)"
+        get() {
+            val version = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "?"
+            return if (keyValues.getBoolean(IosUpdater.TEST_BUILDS, false)) "$version · test $buildNumber" else "$version ($buildNumber)"
+        }
 
     private val buildNumber: Int
         get() = (NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String)?.toIntOrNull() ?: 0
 
-    override val updater: AppUpdater = IosUpdater({ buildNumber }, installer)
+    // Lazy: keyValues is declared further down and isn't set yet while this line would run.
+    override val updater: AppUpdater by lazy { IosUpdater({ buildNumber }, keyValues, installer) }
 
     override val deviceInfo: String
         get() = "${UIDevice.currentDevice.systemName} ${UIDevice.currentDevice.systemVersion}, ${UIDevice.currentDevice.model}"
@@ -103,7 +108,11 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller) {
         val rest = url.substringAfter("schoolday://timetable/", "")
         val classId = rest.substringBefore('?').trim('/')
         val date = rest.substringAfter("date=", "").substringBefore('&')
-        if (classId.isNotEmpty()) openRequest.value = OPEN_TIMETABLE + classId + (if (date.isNotEmpty()) "@$date" else "")
+        if (classId.isEmpty()) return
+        // Opened from the widget while the app wasn't running: skip the launch animation, which
+        // would otherwise play over the Timetable it opens.
+        if (!intro.finished) intro.cancelled = true
+        openRequest.value = OPEN_TIMETABLE + classId + (if (date.isNotEmpty()) "@$date" else "")
     }
 
     /** Called whenever the app comes to the foreground. */
