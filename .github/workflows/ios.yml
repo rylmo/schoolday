@@ -40,7 +40,7 @@ jobs:
       - name: Generate Xcode project
         working-directory: iosApp
         run: |
-          brew install xcodegen
+          brew install xcodegen ldid
           xcodegen generate
 
       - name: Build
@@ -61,6 +61,20 @@ jobs:
         run: |
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/Schoolday.app Payload/
+          # SideStore requests the entitlements it finds in the app's signature, and the build
+          # is unsigned; a placeholder signature carries the app group the widgets share with
+          # the app (SideStore registers it under its own team-specific name).
+          cat > groups.entitlements <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>com.apple.security.application-groups</key>
+            <array><string>group.app.schoolday.ios</string></array>
+          </dict></plist>
+          PLIST
+          ldid -Sgroups.entitlements Payload/Schoolday.app/PlugIns/SchooldayWidget.appex/SchooldayWidget
+          ldid -Sgroups.entitlements Payload/Schoolday.app/Schoolday
+          ldid -e Payload/Schoolday.app/Schoolday
           zip -qry Schoolday-iOS.ipa Payload
           ls -la Schoolday-iOS.ipa
           # The app compares versionCode with its own build number to offer updates;

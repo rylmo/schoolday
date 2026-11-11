@@ -15,6 +15,8 @@ targets:
     platform: iOS
     sources:
       - Schoolday
+      # Shared with the widget: the app-group folder they both use.
+      - Common
     dependencies:
       # The home screen widget, embedded in the app as Schoolday.app/PlugIns.
       - target: SchooldayWidget
@@ -59,6 +61,7 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - SchooldayWidget
+      - Common
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.schoolday.ios.widget

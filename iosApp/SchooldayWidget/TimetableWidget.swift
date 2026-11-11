@@ -4,7 +4,7 @@ import WidgetKit
 
 // MARK: - texts
 
-private enum W {
+enum W {
     static let czech = (Locale.preferredLanguages.first ?? "").hasPrefix("cs")
     static func t(_ en: String, _ cs: String) -> String { czech ? cs : en }
 
@@ -281,33 +281,11 @@ struct TimetableProvider: AppIntentTimelineProvider {
         return Timeline(entries: list, policy: .after(now.addingTimeInterval(45 * 60)))
     }
 
-    /// The saved copy when it is fresh or the user just tapped an arrow (so taps redraw at once),
-    /// otherwise both weeks from Bakaláři.
-    private func loadDays(for classId: String, now: Date) async -> (days: [WidgetDay], offline: Bool) {
-        let cached = WidgetCache.load(classId)
-        if let cached, !cached.isEmpty, WidgetCache.age(classId, now: now) < 20 * 60 || WidgetCache.recentTap(now: now) != nil {
-            return (cached, false)
-        }
-        do {
-            async let thisWeek = Bakalari.week(classId: classId, next: false)
-            async let nextWeek = try? Bakalari.week(classId: classId, next: true)
-            let current = try await thisWeek
-            let upcoming = await nextWeek ?? []
-            let fresh = current + upcoming
-            WidgetCache.save(classId, fresh)
-            WidgetCache.lastError = nil
-            return (fresh, false)
-        } catch {
-            WidgetCache.lastError = String(describing: error)
-            return (cached ?? [], true)
-        }
-    }
-
     private func entries(for configuration: TimetableWidgetIntent, in context: Context, now: Date) async -> [TimetableEntry] {
-        guard let cls = configuration.schoolClass else {
+        guard let cls = WidgetData.chosenClass(configuration.schoolClass) else {
             return [TimetableEntry(date: now, classId: nil, className: nil, window: nil, canUp: false, canDown: false, direction: 1, offline: false)]
         }
-        let (days, offline) = await loadDays(for: cls.id, now: now)
+        let (days, offline) = await WidgetData.days(for: cls.id, now: now)
         guard !days.isEmpty else {
             return [TimetableEntry(date: now, classId: cls.id, className: cls.name, window: nil, canUp: false, canDown: false, direction: 1, offline: offline)]
         }
@@ -556,7 +534,7 @@ struct TimetableWidgetView: View {
     }
 }
 
-private func hm(_ minutes: Int) -> String { String(format: "%d:%02d", minutes / 60, minutes % 60) }
+func hm(_ minutes: Int) -> String { String(format: "%d:%02d", minutes / 60, minutes % 60) }
 
 /// Medium: period, start and end, subject, then one "group · room · teacher" line per group.
 /// Changed lessons get the pink bar.
@@ -673,5 +651,10 @@ struct TimetableWidget: Widget {
 struct SchooldayWidgets: WidgetBundle {
     var body: some Widget {
         TimetableWidget()
+        // Lock Screen
+        CountdownWidget()
+        LunchWidget()
+        NowNextWidget()
+        DayWidget()
     }
 }

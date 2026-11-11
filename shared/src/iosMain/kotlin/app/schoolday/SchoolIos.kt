@@ -14,6 +14,12 @@ import app.schoolday.ui.SchoolApp
 import app.schoolday.update.AppUpdater
 import app.schoolday.update.IosUpdater
 import app.schoolday.update.UpdateInstaller
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSApplicationSupportDirectory
@@ -31,7 +37,7 @@ import platform.UIKit.UIDevice
 import platform.UIKit.UIViewController
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-private class IosPlatform(override val secureStore: SecureStore, installer: UpdateInstaller) : Platform {
+private class IosPlatform(override val secureStore: SecureStore, installer: UpdateInstaller, private val shared: SharedFiles) : Platform {
     private val defaults = NSUserDefaults.standardUserDefaults
 
     private val dir: String = run {
@@ -69,6 +75,8 @@ private class IosPlatform(override val secureStore: SecureStore, installer: Upda
     @Suppress("CAST_NEVER_SUCCEEDS")
     override fun writeCache(name: String, text: String) {
         (text as NSString).writeToFile("$dir/$name", true, NSUTF8StringEncoding, null)
+        // The Lunch Lock Screen widget shows what's ordered, which only the app knows.
+        if (name == LUNCH_CACHE) shared.write(name, text)
     }
 
     override fun cacheAges(): List<Pair<String, Long>> = emptyList()
@@ -77,7 +85,7 @@ private class IosPlatform(override val secureStore: SecureStore, installer: Upda
 }
 
 /** Entry point used by the SwiftUI app. */
-class SchoolIos(secure: SecureStore, installer: UpdateInstaller) {
+class SchoolIos(secure: SecureStore, installer: UpdateInstaller, private val shared: SharedFiles) {
     val chrome = NativeChrome()
     private val vm: AppViewModel
     private val intro: IntroState
@@ -86,7 +94,7 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller) {
     val settingsBridge: SettingsBridge
 
     init {
-        val platform = IosPlatform(secure, installer)
+        val platform = IosPlatform(secure, installer, shared)
         Http.setVersion(platform.versionName)
         val prefs = Prefs(platform.keyValues, platform.secureStore)
         L.apply(prefs.value.lang)
@@ -97,6 +105,7 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller) {
         vm.refreshAll()
         // Quietly, once per launch: a newer test build offers itself through SideStore.
         vm.checkForUpdate()
+        shareWithWidgets(platform)
     }
 
     fun makeViewController(): UIViewController = ComposeUIViewController {
@@ -121,5 +130,20 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller) {
     /** After an update was handed to SideStore and the app is still running the old build: offer it again. */
     fun recheckUpdate() = vm.checkForUpdate()
 
+    /** Gives the widgets the saved lunch menu and your class (their default when none is chosen). */
+    private fun shareWithWidgets(platform: IosPlatform) {
+        platform.readCache(LUNCH_CACHE)?.let { shared.write(LUNCH_CACHE, it) }
+        MainScope().launch {
+            combine(vm.settings, vm.classes) { s, _ -> s.myClass to vm.className(s.myClass) }
+                .distinctUntilChanged()
+                .collect { (id, name) ->
+                    shared.write("myclass.json", buildJsonObject { put("id", id); put("name", name) }.toString())
+                }
+        }
+    }
+
     private val openRequest = mutableStateOf<String?>(null)
 }
+
+/** The lunch menu's cache file, also handed to the widgets. */
+private const val LUNCH_CACHE = "lunch.json"

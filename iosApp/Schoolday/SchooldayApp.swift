@@ -58,7 +58,7 @@ final class AppModel: NSObject, ObservableObject, ChromeListener {
     override init() {
         let installer = SideStoreInstaller()
         self.installer = installer
-        let core = SchoolIos(secure: KeychainStore(), installer: installer)
+        let core = SchoolIos(secure: KeychainStore(), installer: installer, shared: GroupFiles())
         self.core = core
         settings = SettingsModel(bridge: core.settingsBridge)
         super.init()
