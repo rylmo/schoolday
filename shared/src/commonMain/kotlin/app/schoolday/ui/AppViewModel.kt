@@ -83,11 +83,9 @@ class AppViewModel(private val platform: Platform, private val repo: Repository)
 
     fun className(id: String): String = _classes.value.firstOrNull { it.id == id }?.name ?: id
 
-    /** Classes in the Timetable tab: your own first (if enabled or currently opened), then friends. */
-    fun timetableClasses(s: Settings, selected: String): List<String> {
-        val mine = listOf(s.myClass)
-        return (mine + s.shownClasses).distinct()
-    }
+    /** Classes in the Timetable tab: always your own first, then friends'. */
+    fun timetableClasses(s: Settings, selected: String): List<String> =
+        (listOf(s.myClass) + s.shownClasses).distinct()
 
     fun loadTimetable(classId: String, mode: TimetableMode, force: Boolean = false) {
         if (classId.isEmpty()) return
