@@ -85,9 +85,6 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                     Text(vm.className(settings.myClass), style = Type.bodyStrong, color = T.text)
                     Icon(Ic.ChevronDown, null, Modifier.padding(start = 4.dp).size(18.dp), tint = T.text2)
                 }
-                SettingRow(S.showMyClass) {
-                    Toggle(settings.showMyClass) { v -> vm.updateSettings { it.copy(showMyClass = v) } }
-                }
             }
 
             Section(S.app) {

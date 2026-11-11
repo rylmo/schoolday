@@ -21,8 +21,6 @@ data class Settings(
     val shownClasses: List<String> = listOf(DEFAULT_IT3A, DEFAULT_IT2B),
     /** Your own class – used to find your lunch break and for "same as you". */
     val myClass: String = DEFAULT_MY_CLASS,
-    /** Also show your own class's timetable in the Timetable tab. */
-    val showMyClass: Boolean = false,
     val lunchNotification: Boolean = true,
     /** Colour theme id, see AppTheme. */
     val theme: String = "midnight",
@@ -61,7 +59,6 @@ class Prefs(context: Context) {
             shownClasses = sp.getString("shownClasses", null)?.split(',')?.filter { it.isNotBlank() }
                 ?: Settings().shownClasses,
             myClass = sp.getString("myClass", null) ?: Settings.DEFAULT_MY_CLASS,
-            showMyClass = sp.getBoolean("showMyClass", false),
             lunchNotification = sp.getBoolean("lunchNotification", true),
             theme = sp.getString("theme", null) ?: if (sp.getBoolean("systemColors", false)) "system" else "midnight",
             // Anyone upgrading from 1.0 already set the app up.
@@ -79,7 +76,7 @@ class Prefs(context: Context) {
             .remove("icPass")
             .putString("shownClasses", s.shownClasses.joinToString(","))
             .putString("myClass", s.myClass)
-            .putBoolean("showMyClass", s.showMyClass)
+            .remove("showMyClass") // old setting: your class is now always in Timetable
             .putBoolean("lunchNotification", s.lunchNotification)
             .putString("theme", s.theme)
             .putBoolean("onboarded", s.onboarded)

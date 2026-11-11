@@ -99,7 +99,7 @@ fun TimetableScreen(vm: AppViewModel, classId: String, onClassChange: (String) -
     var dayIdx by rememberSaveable { mutableIntStateOf(if (weekend) 0 else todayIdx) }
     var detail by remember { mutableStateOf<Slot?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
-    val tabs = vm.timetableClasses(settings, classId)
+    val tabs = vm.timetableClasses(settings)
 
     LaunchedEffect(classId, mode) { vm.loadTimetable(classId, mode) }
 
@@ -175,7 +175,19 @@ private fun ClassTabs(ids: List<String>, selected: String, name: (String) -> Str
     val target = positions[selected]
     val x by animateDpAsState(target?.first ?: 0.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "tabX")
     val w by animateDpAsState(target?.second ?: 0.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "tabW")
-    Box(modifier.horizontalScroll(rememberScrollState())) {
+    val scroll = rememberScrollState()
+    // A class opened from Today may sit past the edge of the row: bring it into view.
+    LaunchedEffect(selected, target) {
+        val t = target ?: return@LaunchedEffect
+        val left = with(density) { t.first.roundToPx() }
+        val right = with(density) { (t.first + t.second).roundToPx() }
+        val view = scroll.viewportSize
+        when {
+            left < scroll.value -> scroll.animateScrollTo(left)
+            right > scroll.value + view -> scroll.animateScrollTo(right - view)
+        }
+    }
+    Box(modifier.horizontalScroll(scroll)) {
         Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
             ids.forEach { id ->
                 val active = id == selected

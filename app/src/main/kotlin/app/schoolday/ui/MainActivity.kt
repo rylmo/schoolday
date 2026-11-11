@@ -152,7 +152,8 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var lunchSheetDate by rememberSaveable { mutableStateOf<String?>(null) }
     val settings by vm.settings.collectAsStateWithLifecycle()
-    var selectedClass by rememberSaveable { mutableStateOf(settings.shownClasses.firstOrNull() ?: settings.myClass) }
+    // Timetable shows your own class unless you tapped another class on Today.
+    var selectedClass by rememberSaveable { mutableStateOf(settings.myClass) }
     var backProgress by remember { mutableFloatStateOf(0f) }
     var toast by remember { mutableStateOf<UiEvent.Toast?>(null) }
     val haptics = LocalHapticFeedback.current
@@ -212,7 +213,11 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
             NavBar(
                 listOf(S.today to Ic.Today, S.timetable to Ic.Timetable, S.lunch to Ic.Lunch),
                 tab.ordinal,
-            ) { tab = Tab.entries[it] }
+            ) {
+                val target = Tab.entries[it]
+                if (target == Tab.Timetable) selectedClass = settings.myClass
+                tab = target
+            }
         }
 
         AnimatedVisibility(

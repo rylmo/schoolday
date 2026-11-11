@@ -56,7 +56,7 @@ open class Strings(val locale: Locale) {
 
     // Settings
     open val iCanteen = "iCanteen"; open fun remove(what: String) = "Remove $what"; open val addClass = "Add class"
-    open val yourClass = "Your class"; open val yourClassSub = "Finds your lunch break"; open val showMyClass = "Show my class in Timetable"
+    open val yourClass = "Your class"; open val yourClassSub = "Finds your lunch break"
     open val app = "App"; open val lunchNotification = "Lunch notification"; open val lunchNotificationSub = "During your lunch break"
     open val colours = "Colours"; open val dark = "Dark"; open val light = "Light"; open val language = "Language"
     open val help = "Help"; open val copyDebug = "Copy debug info"; open val copyDebugSub = "For reporting a problem"; open val copied = "Copied – paste it to whoever is helping you"
@@ -149,7 +149,7 @@ object Czech : Strings(Locale.forLanguageTag("cs")) {
     override fun cancelled(day: LocalDate) = "Oběd na ${accusative(day)} zrušen"
 
     override fun remove(what: String) = "Odebrat $what"; override val addClass = "Přidat třídu"
-    override val yourClass = "Tvoje třída"; override val yourClassSub = "Podle ní se hledá tvůj oběd"; override val showMyClass = "Zobrazit mou třídu v rozvrhu"
+    override val yourClass = "Tvoje třída"; override val yourClassSub = "Podle ní se hledá tvůj oběd"
     override val app = "Aplikace"; override val lunchNotification = "Oznámení o obědě"; override val lunchNotificationSub = "Během tvé polední pauzy"
     override val colours = "Barvy"; override val dark = "Tmavé"; override val light = "Světlé"; override val language = "Jazyk"
     override val help = "Pomoc"; override val copyDebug = "Zkopírovat ladicí informace"; override val copyDebugSub = "Pro nahlášení problému"; override val copied = "Zkopírováno – pošli to tomu, kdo ti pomáhá"

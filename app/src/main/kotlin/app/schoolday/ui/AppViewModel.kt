@@ -78,11 +78,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun className(id: String): String = _classes.value.firstOrNull { it.id == id }?.name ?: id
 
-    /** Classes in the Timetable tab: your own first (if enabled or currently opened), then friends. */
-    fun timetableClasses(s: Settings, selected: String): List<String> {
-        val mine = if (s.showMyClass || selected == s.myClass) listOf(s.myClass) else emptyList()
-        return (mine + s.shownClasses).distinct()
-    }
+    /** Classes in the Timetable tab: always your own first, then friends'. */
+    fun timetableClasses(s: Settings): List<String> = (listOf(s.myClass) + s.shownClasses).distinct()
 
     fun loadTimetable(classId: String, mode: TimetableMode, force: Boolean = false) {
         if (classId.isEmpty()) return
