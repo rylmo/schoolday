@@ -68,7 +68,8 @@ struct RootView: View {
             NavigationStack {
                 GroupsView(model: model.settings, only: model.groupsKey)
             }
-            .presentationDetents([.medium, .large])
+            // Just one subject's chips: a short sheet that fits them, with nothing to pull up to.
+            .presentationDetents([.height(250)])
             .preferredColorScheme(model.dark ? .dark : .light)
         }
         .sheet(isPresented: settingsShown) {

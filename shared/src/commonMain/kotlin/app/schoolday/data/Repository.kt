@@ -200,6 +200,10 @@ class Repository(private val platform: Platform, val prefs: Prefs) {
         val s = prefs.value
         appendLine("Classes: ${s.shownClasses.joinToString()} · mine: ${s.myClass} · iCanteen: ${if (s.hasICanteen) "logged in" else "no"} · theme: ${s.theme}")
         platform.cacheAges().sortedBy { it.first }.forEach { (name, age) -> appendLine("cache $name: $age min old") }
+        // Breakfast and dinner: which copies have them (the app's menu, and the school website's).
+        fun meals(m: LunchMenu?) = if (m == null) "none" else
+            "${m.source} ${m.days.size} days, breakfast ${m.days.count { it.breakfast != null }}, dinner ${m.days.count { it.dinner != null }}"
+        appendLine("Menu: ${meals(cachedLunch())} · website: ${meals(readCache("web2.json", LunchMenu.serializer()))} · all meals: ${s.allMeals}")
         appendLine("Launch animation: ${Diag.intro}")
         appendLine("Load times:")
         if (Diag.loadTimes.isEmpty()) appendLine("  none") else Diag.loadTimes.forEach { appendLine("  $it") }
