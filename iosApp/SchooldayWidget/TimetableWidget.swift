@@ -620,9 +620,14 @@ struct TimetableWidgetView: View {
     private var dayLabel: String {
         guard let date = dayDate else { return entry.className ?? "Schoolday" }
         let calendar = Calendar.current
+        // Small with the lunch button: three buttons share the header, so day names are short.
+        let short = small && entry.lunchButton
         if calendar.isDate(date, inSameDayAs: entry.date) { return W.today }
-        if let next = calendar.date(byAdding: .day, value: 1, to: entry.date), calendar.isDate(date, inSameDayAs: next) { return W.tomorrow }
-        return W.weekdays[calendar.component(.weekday, from: date) - 1]
+        if let next = calendar.date(byAdding: .day, value: 1, to: entry.date), calendar.isDate(date, inSameDayAs: next) {
+            return short ? W.t("TMRW", "ZÍTRA") : W.tomorrow
+        }
+        let weekday = calendar.component(.weekday, from: date) - 1
+        return short ? W.shortDays[weekday] : W.weekdays[weekday]
     }
 
     private var shortDate: String? {
