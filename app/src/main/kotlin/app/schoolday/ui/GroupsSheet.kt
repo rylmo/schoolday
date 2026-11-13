@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,7 +62,10 @@ fun GroupsSheet(vm: AppViewModel, only: String? = null, onDismiss: () -> Unit) {
     }).filter { it.key == only }.distinctBy { it.key }.take(1).ifEmpty { all }
     val scope = rememberCoroutineScope()
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = T.raised, contentColor = T.text, dragHandle = {
+    // Only open or closed: with a "half open" stop, scrolling down from mid-list could make the
+    // sheet bounce between the two positions without settling.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = T.raised, contentColor = T.text, dragHandle = {
         Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 36.dp, height = 4.dp).clip(CircleShape).background(T.lineStrong))
     }) {
         Column(
