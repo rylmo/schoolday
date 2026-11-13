@@ -13,12 +13,14 @@ object Changelog {
             7, "1.3",
             en = listOf(
                 "Home screen widgets: timetable with a menu switch, timetable only, and menu only. Set their background and transparency in Settings.",
+                "Your groups: in Settings, pick your group in each split subject, and Timetable, Today, the widgets and the lunch notification show only your lessons.",
                 "Breakfast and dinner can be shown too. The Lunch tab then becomes Menu.",
                 "This What's new screen, also found in Settings.",
                 "If an update fails, the reason is saved in Copy debug info, and you can download the update in your browser instead.",
             ),
             cs = listOf(
                 "Widgety na plochu: rozvrh s přepínačem na jídelníček, jen rozvrh a jen jídelníček. Pozadí a průhlednost nastavíš v Nastavení.",
+                "Tvoje skupiny: v Nastavení si u každého děleného předmětu vyber svou skupinu a Rozvrh, Dnes, widgety i oznámení o obědě ukážou jen tvoje hodiny.",
                 "Můžeš si zobrazit i snídaně a večeře. Karta Oběd se pak změní na Jídelníček.",
                 "Tahle obrazovka Co je nového, najdeš ji i v Nastavení.",
                 "Když aktualizace selže, důvod se uloží do ladicích informací a aktualizaci můžeš stáhnout v prohlížeči.",

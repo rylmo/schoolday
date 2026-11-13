@@ -70,9 +70,8 @@ object LunchNotifier {
 
     /** Your lunch window on [date], from the saved timetables (this week's, then next week's). */
     private fun windowOn(ctx: Context, date: LocalDate): LunchWindow? {
-        val myClass = ctx.app.prefs.value.myClass
         return listOf(TimetableMode.Actual, TimetableMode.Next)
-            .firstNotNullOfOrNull { ctx.app.repo.cachedTimetable(myClass, it)?.day(date) }
+            .firstNotNullOfOrNull { ctx.app.repo.myTimetable(it)?.day(date) }
             ?.lunchWindow()
     }
 

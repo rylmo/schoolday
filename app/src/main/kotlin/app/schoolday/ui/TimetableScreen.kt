@@ -69,6 +69,7 @@ import app.schoolday.data.Lesson
 import app.schoolday.data.Slot
 import app.schoolday.data.TimetableDay
 import app.schoolday.data.TimetableMode
+import app.schoolday.data.Groups
 import app.schoolday.logic.Gap
 import app.schoolday.logic.endTime
 import app.schoolday.logic.gaps
@@ -99,6 +100,11 @@ fun TimetableScreen(vm: AppViewModel, classId: String, onClassChange: (String) -
     var dayIdx by rememberSaveable { mutableIntStateOf(if (weekend) 0 else todayIdx) }
     var detail by remember { mutableStateOf<Slot?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    var groupSplit by remember { mutableStateOf<String?>(null) }
+    // Your own class only: a split lesson whose group you haven't picked gets a "!".
+    val unsetSplit: (Slot) -> String? = { slot ->
+        if (classId != settings.myClass) null else Groups.keyOf(slot)?.takeIf { it !in settings.groups }
+    }
     val tabs = vm.timetableClasses(settings)
 
     LaunchedEffect(classId, mode) { vm.loadTimetable(classId, mode) }
@@ -140,7 +146,7 @@ fun TimetableScreen(vm: AppViewModel, classId: String, onClassChange: (String) -
                 when {
                     data == null -> Message(s?.error ?: S.loading)
                     week -> WeekList(data.days, m == TimetableMode.Actual, today) { dayIdx = it; weekView = false }
-                    else -> DayPager(data.days, dayIdx, { dayIdx = it }, m == TimetableMode.Actual, todayIdx) { detail = it }
+                    else -> DayPager(data.days, dayIdx, { dayIdx = it }, m == TimetableMode.Actual, todayIdx, unsetSplit, { groupSplit = it }) { detail = it }
                 }
             }
         }
@@ -160,6 +166,8 @@ fun TimetableScreen(vm: AppViewModel, classId: String, onClassChange: (String) -
             onDismiss = { menuOpen = false },
         )
     }
+
+    groupSplit?.let { key -> GroupsSheet(vm, only = key) { groupSplit = null } }
 
     detail?.let { slot ->
         ModalBottomSheet(onDismissRequest = { detail = null }, containerColor = T.raised, contentColor = T.text, dragHandle = {
@@ -217,7 +225,7 @@ private fun Message(text: String) {
 @Composable
 private fun DayPager(
     days: List<TimetableDay>, dayIdx: Int, onDayChange: (Int) -> Unit,
-    showToday: Boolean, todayIdx: Int, onSlot: (Slot) -> Unit,
+    showToday: Boolean, todayIdx: Int, unsetSplit: (Slot) -> String?, onSplit: (String) -> Unit, onSlot: (Slot) -> Unit,
 ) {
     val pager = rememberPagerState(initialPage = dayIdx.coerceIn(0, 4)) { 5 }
     val scope = rememberCoroutineScope()
@@ -233,7 +241,7 @@ private fun DayPager(
                 val s = 1f - 0.05f * off
                 scaleX = s; scaleY = s; alpha = 1f - 0.35f * off
             }) {
-                DayRail(days.firstOrNull { it.weekday == page }, showToday && page == todayIdx, onSlot)
+                DayRail(days.firstOrNull { it.weekday == page }, showToday && page == todayIdx, unsetSplit, onSplit, onSlot)
             }
         }
     }
@@ -284,7 +292,7 @@ private fun rowsFor(day: TimetableDay, now: Int?): List<Row_> {
 }
 
 @Composable
-private fun DayRail(day: TimetableDay?, isToday: Boolean, onSlot: (Slot) -> Unit) {
+private fun DayRail(day: TimetableDay?, isToday: Boolean, unsetSplit: (Slot) -> String?, onSplit: (String) -> Unit, onSlot: (Slot) -> Unit) {
     if (day == null || day.slots.none { it.isReal }) {
         Message(if (day?.dayOff == true) day.dayOffName.ifEmpty { S.dayOff } else S.noLessons)
         return
@@ -297,7 +305,10 @@ private fun DayRail(day: TimetableDay?, isToday: Boolean, onSlot: (Slot) -> Unit
             items(rowsFor(day, now), key = { r -> "${r::class.simpleName}-${r.time}" }) { r ->
                 Box(Modifier.animateItem()) {
                     when (r) {
-                        is Row_.Lesson_ -> LessonRow(r.slot, isNow = now != null && now in r.slot.start until r.slot.end) { onSlot(r.slot) }
+                        is Row_.Lesson_ -> LessonRow(
+                            r.slot, isNow = now != null && now in r.slot.start until r.slot.end,
+                            unsetSplit = unsetSplit(r.slot), onSplit = onSplit,
+                        ) { onSlot(r.slot) }
                         is Row_.Gap_ -> Band(
                             if (r.gap.kind == Gap.Kind.Lunch) S.statusLunch else S.free,
                             periodText(periodsIn(r.gap.start, r.gap.end)), "${r.gap.start.hm()} – ${r.gap.end.hm()}",
@@ -341,7 +352,7 @@ private fun Band(title: String, period: String?, time: String, lunch: Boolean) {
 
 /** One lesson period; groups are merged into one line, details live in the sheet. */
 @Composable
-private fun LessonRow(slot: Slot, isNow: Boolean, onClick: () -> Unit) {
+private fun LessonRow(slot: Slot, isNow: Boolean, unsetSplit: String?, onSplit: (String) -> Unit, onClick: () -> Unit) {
     val live = slot.lessons.filter { !it.removed }
     val gone = slot.lessons.filter { it.removed }
     val allGone = live.isEmpty()
@@ -368,6 +379,18 @@ private fun LessonRow(slot: Slot, isNow: Boolean, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(title, style = Type.bodyStrong, color = T.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (live.size > 1) Text(S.groups(live.size), style = Type.tiny.copy(fontSize = Type.small.fontSize * 0.92f), color = T.text3)
+                    if (unsetSplit != null) {
+                        // Nudge to pick your group: opens just this subject's groups.
+                        Box(
+                            Modifier.size(20.dp).clip(CircleShape).background(T.accent).pressable { onSplit(unsetSplit) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "!", style = Type.tiny.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Black, fontSize = Type.small.fontSize),
+                                color = T.onAccent,
+                            )
+                        }
+                    }
                 }
                 Text(mergedMeta(live), style = Type.small, color = T.text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val tags = live.filter { it.kind != ChangeKind.None }.distinctBy { it.kind }

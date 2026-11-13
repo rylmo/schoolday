@@ -303,7 +303,7 @@ object Widgets {
         val today = LocalDate.now()
         val now = nowMinutes()
         val ends = listOf(app.schoolday.data.TimetableMode.Actual, app.schoolday.data.TimetableMode.Next)
-            .mapNotNull { ctx.app.repo.cachedTimetable(s.myClass, it) }
+            .mapNotNull { ctx.app.repo.myTimetable(it) }
             .flatMap { it.days }.firstOrNull { it.date == today.toString() }
             ?.slots?.map { it.end }.orEmpty()
         val next = ends.filter { it > now }.minOrNull()

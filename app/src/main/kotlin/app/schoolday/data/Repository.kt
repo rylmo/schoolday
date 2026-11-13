@@ -55,6 +55,12 @@ class Repository(private val context: Context, val prefs: Prefs) {
     fun cachedTimetable(classId: String, mode: TimetableMode): Timetable? =
         readCache("tt2_${classId}_${mode.name}.json", Timetable.serializer())
 
+    /** Your own class's saved timetable without the groups you're not in (Settings › Your groups). */
+    fun myTimetable(mode: TimetableMode): Timetable? {
+        val s = prefs.value
+        return cachedTimetable(s.myClass, mode)?.let { Groups.filter(it, Groups.hidden(s.groups)) }
+    }
+
     fun cachedLunch(): LunchMenu? = readCache("lunch.json", LunchMenu.serializer())
     fun cachedClasses(): List<SchoolClass>? = readCache("classes.json", ListSerializer(SchoolClass.serializer()))
 

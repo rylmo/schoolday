@@ -91,7 +91,7 @@ class WidgetData(
             val app = ctx.app
             val s = app.prefs.value
             val days = listOf(TimetableMode.Actual, TimetableMode.Next)
-                .mapNotNull { app.repo.cachedTimetable(s.myClass, it) }
+                .mapNotNull { app.repo.myTimetable(it) }
                 .flatMap { it.days }
                 .filter { it.date.isNotEmpty() }
                 .distinctBy { it.date }

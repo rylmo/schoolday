@@ -35,6 +35,8 @@ data class Settings(
     /** Home screen widgets: background (see WidgetStyle) and how opaque it is, 0–100. */
     val widgetStyle: String = "dark",
     val widgetOpacity: Int = 90,
+    /** Your group in each split subject of your class: the split's key (see Groups) → your group. */
+    val groups: Map<String, String> = emptyMap(),
 ) {
     val hasICanteen get() = icUser.isNotBlank() && icPass.isNotBlank()
 
@@ -75,6 +77,12 @@ class Prefs(context: Context) {
             notesSeen = sp.getInt("notesSeen", -1),
             widgetStyle = sp.getString("widgetStyle", null) ?: "dark",
             widgetOpacity = sp.getInt("widgetOpacity", 90),
+            // Same format as the iPhone version: "key=pick;key=pick".
+            groups = sp.getString("groups", "").orEmpty().split(';').mapNotNull { pair ->
+                val key = pair.substringBefore('=', "")
+                val pick = pair.substringAfter('=', "")
+                if (key.isEmpty() || pick.isEmpty()) null else key to pick
+            }.toMap(),
         )
     }
 
@@ -96,6 +104,7 @@ class Prefs(context: Context) {
             .putInt("notesSeen", s.notesSeen)
             .putString("widgetStyle", s.widgetStyle)
             .putInt("widgetOpacity", s.widgetOpacity)
+            .putString("groups", s.groups.entries.joinToString(";") { "${it.key}=${it.value}" })
             .apply()
         _state.value = s
     }

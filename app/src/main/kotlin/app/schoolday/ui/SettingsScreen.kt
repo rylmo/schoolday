@@ -65,6 +65,7 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
     var picker by remember { mutableStateOf<String?>(null) } // "add" | "mine" | "theme"
     var copied by remember { mutableStateOf(false) }
     var showNotes by remember { mutableStateOf(false) }
+    var showGroups by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(T.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.padding(start = 8.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -93,6 +94,11 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                     Text(vm.className(settings.myClass), style = Type.bodyStrong, color = T.text)
                     Icon(Ic.ChevronDown, null, Modifier.padding(start = 4.dp).size(18.dp), tint = T.text2)
                 }
+                SettingRow(
+                    S.yourGroups,
+                    if (settings.groups.isEmpty()) S.groupsNone else S.groupsChosen(settings.groups.size),
+                    onClick = { showGroups = true },
+                ) { Icon(Ic.ChevronDown, null, Modifier.size(18.dp), tint = T.text2) }
             }
 
             Section(S.app) {
@@ -144,6 +150,7 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
     }
 
     if (showNotes) WhatsNewSheet(Changelog.entries) { showNotes = false; vm.dismissNotes() }
+    if (showGroups) GroupsSheet(vm) { showGroups = false }
 
     when (picker) {
         "add" -> PickerSheet(

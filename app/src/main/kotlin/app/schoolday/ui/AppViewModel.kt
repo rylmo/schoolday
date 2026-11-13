@@ -24,6 +24,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
+import app.schoolday.data.Groups
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -55,7 +59,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val classes = _classes.asStateFlow()
 
     private val _timetables = MutableStateFlow<Map<TtKey, UiState<Timetable>>>(emptyMap())
-    val timetables = _timetables.asStateFlow()
+
+    /** Every group's lessons, as Bakaláři has them (Settings › Your groups reads the splits from these). */
+    val rawTimetables = _timetables.asStateFlow()
+
+    /** What the screens show: your own class without the groups you're not in. */
+    val timetables: StateFlow<Map<TtKey, UiState<Timetable>>> =
+        combine(_timetables, settings) { all, s -> withYourGroups(all, s) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, withYourGroups(_timetables.value, settings.value))
+
+    private fun withYourGroups(all: Map<TtKey, UiState<Timetable>>, s: Settings): Map<TtKey, UiState<Timetable>> {
+        val hidden = Groups.hidden(s.groups)
+        if (hidden.isEmpty()) return all
+        return all.mapValues { (key, state) ->
+            val tt = state.data
+            if (key.classId != s.myClass || tt == null) state else state.copy(data = Groups.filter(tt, hidden))
+        }
+    }
 
     private val _lunch = MutableStateFlow(UiState(repo.cachedLunch()))
     val lunch = _lunch.asStateFlow()
@@ -179,7 +199,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             L.apply(after.lang)
             LunchNotifier.createChannel(ctx) // channel name follows the language
         }
-        if (before.myClass != after.myClass) loadTimetable(after.myClass, TimetableMode.Actual, force = true)
+        if (before.myClass != after.myClass) {
+            loadTimetable(after.myClass, TimetableMode.Actual, force = true)
+            // Groups belong to a class; another class has other splits.
+            if (after.groups.isNotEmpty() && after.groups == before.groups) repo.prefs.update { it.copy(groups = emptyMap()) }
+        }
+        if (before.groups != after.groups) LunchNotifier.reschedule(ctx)
         (after.shownClasses - before.shownClasses.toSet()).forEach { loadTimetable(it, TimetableMode.Actual) }
         if (before.lunchNotification != after.lunchNotification) LunchNotifier.reschedule(ctx)
         // Menus saved by older versions have no breakfast or dinner yet.

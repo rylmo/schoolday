@@ -42,6 +42,13 @@ open class Strings(val locale: Locale) {
     open val widgets = "Widgets"; open val widgetBackground = "Background"; open val widgetTransparency = "Transparency"
     open fun widgetStyleName(id: String) = when (id) { "black" -> "Black"; "light" -> "Light"; else -> "Dark grey" }
     open val widgetNoData = "Open Schoolday once to load your timetable"
+    open val yourGroups = "Your groups"
+    open val yourGroupsSub = "Pick the groups you're in, so the timetable and widgets show only your lessons."
+    open val groupsNone = "Every group shown"; open fun groupsChosen(n: Int) = if (n == 1) "1 subject set" else "$n subjects set"
+    open val noSplits = "Your class has no split subjects."
+    open val allGroups = "All"; open val everyGroup = "every group"
+    open val yourGroup = "your group"; open val yourSubject = "your subject"
+    open val praxeNote = "Praxe isn't here: its teachers rotate every few months, so it always shows every group."
     open val widgetSettings = "Widget settings"; open val widgetShows = "This widget shows"
     open val widgetSharedNote = "Background and transparency apply to all Schoolday widgets."
     open fun widgetKindName(k: WidgetKind) = when (k) {
@@ -146,6 +153,14 @@ object Czech : Strings(Locale.forLanguageTag("cs")) {
     override val widgets = "Widgety"; override val widgetBackground = "Pozadí"; override val widgetTransparency = "Průhlednost"
     override fun widgetStyleName(id: String) = when (id) { "black" -> "Černá"; "light" -> "Světlá"; else -> "Tmavě šedá" }
     override val widgetNoData = "Otevři Schoolday, aby se načetl rozvrh"
+    override val yourGroups = "Tvoje skupiny"
+    override val yourGroupsSub = "Vyber skupiny, do kterých chodíš, a rozvrh i widgety ukážou jen tvoje hodiny."
+    override val groupsNone = "Zobrazují se všechny skupiny"
+    override fun groupsChosen(n: Int) = when (n) { 1 -> "Nastaven 1 předmět"; in 2..4 -> "Nastaveny $n předměty"; else -> "Nastaveno $n předmětů" }
+    override val noSplits = "Tvoje třída nemá žádné dělené předměty."
+    override val allGroups = "Vše"; override val everyGroup = "všechny skupiny"
+    override val yourGroup = "tvoje skupina"; override val yourSubject = "tvůj předmět"
+    override val praxeNote = "Praxe tu není: učitelé se střídají každých pár měsíců, takže se vždy ukazují všechny skupiny."
     override val widgetSettings = "Nastavení widgetu"; override val widgetShows = "Widget zobrazuje"
     override val widgetSharedNote = "Pozadí a průhlednost platí pro všechny widgety Schoolday."
     override fun widgetKindName(k: WidgetKind) = when (k) {
