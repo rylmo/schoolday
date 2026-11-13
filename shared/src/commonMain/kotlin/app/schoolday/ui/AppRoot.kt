@@ -216,7 +216,7 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
             chrome.showSettings = { showSettings = true }
             onDispose { chrome.selectTab = {}; chrome.goBack = {}; chrome.showSettings = {} }
         }
-        val titles = listOf(S.today, S.timetable, S.lunch)
+        val titles = listOf(S.today, S.timetable, if (settings.allMeals) S.menu else S.lunch)
         val dark = T.isDark
         LaunchedEffect(tab, showSettings, intro.finished, titles, dark) {
             // Settings is a native sheet over the tab bar, so the bar stays.
@@ -254,7 +254,7 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
             }
             if (chrome == null) {
                 NavBar(
-                    listOf(S.today to Ic.Today, S.timetable to Ic.Timetable, S.lunch to Ic.Lunch),
+                    listOf(S.today to Ic.Today, S.timetable to Ic.Timetable, (if (settings.allMeals) S.menu else S.lunch) to Ic.Lunch),
                     tab.ordinal,
                 ) { selectTab(Tab.entries[it]) }
             }

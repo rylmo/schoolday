@@ -134,10 +134,11 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller, private val sha
     private fun shareWithWidgets(platform: IosPlatform) {
         platform.readCache(LUNCH_CACHE)?.let { shared.write(LUNCH_CACHE, it) }
         MainScope().launch {
-            combine(vm.settings, vm.classes) { s, _ -> s.myClass to vm.className(s.myClass) }
+            combine(vm.settings, vm.classes) { s, _ -> Triple(s.myClass, vm.className(s.myClass), s.allMeals) }
                 .distinctUntilChanged()
-                .collect { (id, name) ->
-                    shared.write("myclass.json", buildJsonObject { put("id", id); put("name", name) }.toString())
+                .collect { (id, name, allMeals) ->
+                    // allMeals: the widget's menu shows breakfast and dinner too.
+                    shared.write("myclass.json", buildJsonObject { put("id", id); put("name", name); put("allMeals", allMeals) }.toString())
                 }
         }
     }

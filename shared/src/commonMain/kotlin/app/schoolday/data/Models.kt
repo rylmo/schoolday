@@ -100,6 +100,9 @@ data class LunchDay(
     val date: String,
     val soup: String?,
     val options: List<MealOption>,
+    /** The dormitory's breakfast and dinner (school website, view only). */
+    val breakfast: String? = null,
+    val dinner: String? = null,
 ) {
     val ordered: MealOption? get() = options.firstOrNull { it.ordered }
 }

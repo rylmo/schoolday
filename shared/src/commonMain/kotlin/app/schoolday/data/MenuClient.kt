@@ -18,6 +18,8 @@ object MenuClient {
         return doc.select("div.jidelnicekDen").mapNotNull { dayEl ->
             val date = dayEl.selectFirst("[id^=day-]")?.id()?.removePrefix("day-") ?: return@mapNotNull null
             var soup: String? = null
+            var breakfast: String? = null
+            var dinner: String? = null
             val options = mutableListOf<MealOption>()
             for (row in dayEl.select("div.container")) {
                 val label = row.selectFirst(".shrinkedColumn")?.text()?.trim().orEmpty()
@@ -30,11 +32,13 @@ object MenuClient {
                         val n = Regex("""\d+""").find(label)?.value?.toIntOrNull() ?: (options.size + 1)
                         options += MealOption(number = n, name = name, allergens = allergens)
                     }
-                    // Snídaně / Večeře are for the dormitory – ignored.
+                    // The dormitory's meals, shown when Settings › Breakfast and dinner is on.
+                    label.startsWith("Snídaně", ignoreCase = true) -> breakfast = name
+                    label.startsWith("Večeře", ignoreCase = true) -> dinner = name
                 }
             }
             if (options.isEmpty() && soup == null) null
-            else LunchDay(date, soup, options.sortedBy { it.number })
+            else LunchDay(date, soup, options.sortedBy { it.number }, breakfast, dinner)
         }
     }
 

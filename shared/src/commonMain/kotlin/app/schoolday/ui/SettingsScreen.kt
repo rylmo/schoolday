@@ -86,6 +86,9 @@ fun SettingsScreen(vm: AppViewModel, showBack: Boolean, onBack: () -> Unit) {
             }
 
             Section(S.app) {
+                SettingRow(S.allMeals, S.allMealsSub) {
+                    Toggle(settings.allMeals) { v -> vm.updateSettings { it.copy(allMeals = v) } }
+                }
                 SettingRow(S.lunchNotification, S.lunchNotificationSub) {
                     Toggle(settings.lunchNotification) { v -> vm.updateSettings { it.copy(lunchNotification = v) } }
                 }

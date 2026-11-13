@@ -97,6 +97,12 @@ struct TimetableWidgetIntent: WidgetConfigurationIntent {
 
     @Parameter(title: "Class")
     var schoolClass: ClassEntity?
+
+    @Parameter(title: "Lunch button", default: false)
+    var lunchButton: Bool
+
+    @Parameter(title: "Colours", default: .bakalari)
+    var colors: WidgetTheme
 }
 
 /// The ▲ ▼ buttons: move two lines up or down through the week.
@@ -255,6 +261,11 @@ struct TimetableEntry: TimelineEntry {
     let offline: Bool
     /// Height of the rows area, for the medium widget's fade at the bottom.
     var rowsHeight: CGFloat = 0
+    var theme: WidgetTheme = .bakalari
+    /// Edit Widget › Lunch button: show the button that flips to the menu.
+    var lunchButton = false
+    /// Set while the widget shows the menu instead of the timetable.
+    var menu: MenuPage?
 }
 
 struct TimetableProvider: AppIntentTimelineProvider {
@@ -266,19 +277,50 @@ struct TimetableProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: TimetableWidgetIntent, in context: Context) async -> TimetableEntry {
-        if context.isPreview, configuration.schoolClass == nil { return placeholder(in: context) }
-        return await entries(for: configuration, in: context, now: Date()).first ?? placeholder(in: context)
+        if context.isPreview, configuration.schoolClass == nil { return styled(placeholder(in: context), configuration) }
+        let first = await entries(for: configuration, in: context, now: Date()).first ?? placeholder(in: context)
+        return styled(first, configuration)
+    }
+
+    private func styled(_ entry: TimetableEntry, _ configuration: TimetableWidgetIntent) -> TimetableEntry {
+        var e = entry
+        e.theme = configuration.colors
+        e.lunchButton = configuration.lunchButton
+        return e
     }
 
     func timeline(for configuration: TimetableWidgetIntent, in context: Context) async -> Timeline<TimetableEntry> {
         let now = Date()
-        let list = await entries(for: configuration, in: context, now: now)
+        if configuration.lunchButton, let cls = WidgetData.chosenClass(configuration.schoolClass), WidgetCache.menuMode(cls.id, now: now) {
+            let entry = await menuEntry(cls, configuration, context, now: now)
+            // Back to the timetable when the menu's hold runs out.
+            return Timeline(entries: [entry], policy: .after((WidgetCache.menuExpiry(cls.id) ?? now).addingTimeInterval(2)))
+        }
+        let list = await entries(for: configuration, in: context, now: now).map { styled($0, configuration) }
         // Right after an arrow tap only "now" (and the reset) is planned, so the tap redraws
         // quickly; the full day's plan is made at the next reload, just after the reset.
         if WidgetCache.recentTap(now: now) != nil {
             return Timeline(entries: list, policy: .after(now.addingTimeInterval(WidgetCache.manualHold + 2)))
         }
         return Timeline(entries: list, policy: .after(now.addingTimeInterval(45 * 60)))
+    }
+
+    /// The menu for one day; ▲ ▼ move through the days.
+    private func menuEntry(_ cls: ClassEntity, _ configuration: TimetableWidgetIntent, _ context: Context, now: Date) async -> TimetableEntry {
+        let (days, iCanteen) = await WidgetData.menuDays()
+        let built = MenuPage.build(days: days, iCanteen: iCanteen, allMeals: WidgetData.allMeals(),
+                                   offset: WidgetCache.menuOffset(cls.id), now: now)
+        if let built, built.index != WidgetCache.menuOffset(cls.id) { WidgetCache.setMenuOffset(cls.id, built.index) }
+        let small = context.family == .systemSmall
+        let height = context.displaySize.height > 0 ? context.displaySize.height : 169
+        var entry = TimetableEntry(
+            date: now, classId: cls.id, className: cls.name, window: nil,
+            canUp: built?.page.canUp ?? false, canDown: built?.page.canDown ?? false,
+            direction: WidgetCache.recentTap(now: now) ?? 1, offline: false,
+            rowsHeight: height - 2 * Metrics.padding - Metrics.headerHeight(small: small) - Metrics.headerGap
+        )
+        entry.menu = built?.page ?? MenuPage(date: WidgetDates.key(now), rows: [], canUp: false, canDown: false)
+        return styled(entry, configuration)
     }
 
     private func entries(for configuration: TimetableWidgetIntent, in context: Context, now: Date) async -> [TimetableEntry] {
@@ -354,10 +396,34 @@ struct TimetableProvider: AppIntentTimelineProvider {
 private struct Palette {
     let fullColor: Bool
     let dark: Bool
+    var theme: WidgetTheme = .bakalari
 
-    var background: Color { dark ? Color(red: 0.13, green: 0.137, blue: 0.153) : Color(red: 0.925, green: 0.925, blue: 0.937) }
-    var row: Color { fullColor ? (dark ? Color.black.opacity(0.24) : Color.black.opacity(0.05)) : Color.primary.opacity(0.1) }
-    var pink: Color { dark ? Color(red: 0.94, green: 0.33, blue: 0.53) : Color(red: 0.85, green: 0.11, blue: 0.38) }
+    private func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color { Color(red: r, green: g, blue: b) }
+
+    var background: Color {
+        switch theme {
+        case .bakalari: dark ? rgb(0.13, 0.137, 0.153) : rgb(0.925, 0.925, 0.937)
+        case .schoolday: dark ? rgb(0.059, 0.063, 0.071) : rgb(0.965, 0.957, 0.937)
+        case .graphite: dark ? rgb(0.11, 0.11, 0.118) : rgb(0.93, 0.93, 0.94)
+        case .ocean: dark ? rgb(0.055, 0.1, 0.17) : rgb(0.91, 0.94, 0.98)
+        }
+    }
+
+    var row: Color {
+        guard fullColor else { return Color.primary.opacity(0.1) }
+        guard dark else { return Color.black.opacity(0.05) }
+        return theme == .schoolday || theme == .ocean ? Color.white.opacity(0.07) : Color.black.opacity(0.24)
+    }
+
+    /// The colour for changes and your order: Bakaláři's pink, Schoolday's orange, and so on.
+    var pink: Color {
+        switch theme {
+        case .bakalari: dark ? rgb(0.94, 0.33, 0.53) : rgb(0.85, 0.11, 0.38)
+        case .schoolday: dark ? rgb(0.949, 0.651, 0.353) : rgb(0.78, 0.42, 0.12)
+        case .graphite: dark ? rgb(0.62, 0.68, 0.78) : rgb(0.33, 0.4, 0.5)
+        case .ocean: dark ? rgb(0.45, 0.72, 1.0) : rgb(0.12, 0.42, 0.8)
+        }
+    }
     var changedRow: Color { fullColor ? pink.opacity(dark ? 0.2 : 0.12) : Color.primary.opacity(0.16) }
     var text: Color { fullColor ? (dark ? Color(white: 0.95) : Color(white: 0.1)) : .primary }
     var secondary: Color { fullColor ? (dark ? Color(white: 0.72) : Color(white: 0.35)) : .secondary }
@@ -370,10 +436,11 @@ struct TimetableWidgetView: View {
     @Environment(\.widgetRenderingMode) private var renderingMode
     @Environment(\.colorScheme) private var scheme
 
-    private var palette: Palette { Palette(fullColor: renderingMode == .fullColor, dark: scheme == .dark) }
+    private var palette: Palette { Palette(fullColor: renderingMode == .fullColor, dark: scheme == .dark, theme: entry.theme) }
     private var small: Bool { family == .systemSmall }
 
-    private var arrowsShown: Bool { entry.classId != nil && entry.window != nil }
+    private var arrowsShown: Bool { entry.classId != nil && (entry.window != nil || entry.menu != nil) }
+    private var menuButtonShown: Bool { entry.lunchButton && arrowsShown }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -388,6 +455,7 @@ struct TimetableWidgetView: View {
                         .contentTransition(.opacity)
                     Spacer(minLength: 0)
                     if small, arrowsShown, let id = entry.classId {
+                        if menuButtonShown { menuButton(classId: id, size: Metrics.headerArrow) }
                         arrow("chevron.up", step: -1, enabled: entry.canUp, classId: id, size: Metrics.headerArrow)
                         arrow("chevron.down", step: 1, enabled: entry.canDown, classId: id, size: Metrics.headerArrow)
                     }
@@ -404,6 +472,7 @@ struct TimetableWidgetView: View {
             // Medium: bigger buttons, centred on the whole widget.
             if !small, arrowsShown, let id = entry.classId {
                 VStack(spacing: Metrics.sideArrowGap) {
+                    if menuButtonShown { menuButton(classId: id, size: Metrics.sideArrow) }
                     arrow("chevron.up", step: -1, enabled: entry.canUp, classId: id, size: Metrics.sideArrow)
                     arrow("chevron.down", step: 1, enabled: entry.canDown, classId: id, size: Metrics.sideArrow)
                 }
@@ -414,23 +483,58 @@ struct TimetableWidgetView: View {
         .widgetURL(link)
     }
 
+    private func roundIcon(_ symbol: String, size: CGFloat) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.45, weight: .bold))
+            .foregroundStyle(palette.text)
+            .frame(width: size, height: size)
+            .background(Circle().fill(palette.row))
+    }
+
+    /// ▲ ▼: lessons in the timetable, days in the menu.
+    @ViewBuilder
     private func arrow(_ symbol: String, step: Int, enabled: Bool, classId: String, size: CGFloat) -> some View {
-        Button(intent: ShiftPageIntent(classId: classId, step: step)) {
-            Image(systemName: symbol)
-                .font(.system(size: size * 0.45, weight: .bold))
-                .foregroundStyle(palette.text)
-                .frame(width: size, height: size)
-                .background(Circle().fill(palette.row))
+        Group {
+            if entry.menu != nil {
+                Button(intent: ShiftMenuIntent(classId: classId, step: step)) { roundIcon(symbol, size: size) }
+            } else {
+                Button(intent: ShiftPageIntent(classId: classId, step: step)) { roundIcon(symbol, size: size) }
+            }
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.3)
     }
 
+    /// The lunch button: a fork in the timetable, a calendar in the menu (to go back).
+    private func menuButton(classId: String, size: CGFloat) -> some View {
+        Button(intent: ToggleMenuIntent(classId: classId)) {
+            roundIcon(entry.menu == nil ? "fork.knife" : "calendar", size: size)
+        }
+        .buttonStyle(.plain)
+    }
+
     @ViewBuilder
     private var content: some View {
         if entry.classId == nil {
             message(W.chooseClass)
+        } else if let menu = entry.menu {
+            Group {
+                if menu.rows.isEmpty {
+                    message(W.noMenuDays)
+                } else {
+                    VStack(spacing: Metrics.gap(small: small)) {
+                        ForEach(menu.rows, id: \.self) { row in
+                            MenuLine(row: row, small: small, accent: palette.accent, text: palette.text,
+                                     secondary: palette.secondary, fill: palette.row, mineFill: palette.changedRow)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .id("menu-" + menu.date)
+            .transition(.push(from: entry.direction < 0 ? .top : .bottom))
+            .animation(.smooth(duration: 0.4), value: menu.date)
         } else if let window = entry.window {
             Group {
                 if window.rows.isEmpty {
@@ -509,7 +613,9 @@ struct TimetableWidgetView: View {
         return URL(string: "schoolday://timetable/\(id)\(day)")
     }
 
-    private var dayDate: Date? { entry.window.flatMap { WidgetDates.date(from: $0.day.date) } }
+    private var dayDate: Date? {
+        entry.window.flatMap { WidgetDates.date(from: $0.day.date) } ?? entry.menu.flatMap { WidgetDates.date(from: $0.date) }
+    }
 
     private var dayLabel: String {
         guard let date = dayDate else { return entry.className ?? "Schoolday" }
@@ -529,6 +635,7 @@ struct TimetableWidgetView: View {
         var title = dayLabel
         if !small, let short = shortDate { title += " (\(short))" }
         if !small, let name = entry.className, entry.window != nil { title = "\(name) · " + title }
+        if !small, entry.menu != nil { title = (WidgetData.allMeals() ? W.menuWord : W.lunchHeader) + " · " + title }
         if entry.offline { title += " · " + W.offline }
         return title
     }

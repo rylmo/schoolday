@@ -31,6 +31,7 @@ class SettingsSnapshot(
     val updateStatus: String,
     val updateAvailable: Boolean,
     val testBuilds: Boolean,
+    val allMeals: Boolean,
 )
 
 /** Implemented by the SwiftUI Settings screen. */
@@ -75,6 +76,7 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
             },
             language = s.lang,
             testBuilds = s.testBuilds,
+            allMeals = s.allMeals,
             languages = listOf(
                 SettingsOption("system", S.langSystem),
                 SettingsOption("cs", "Čeština"),
@@ -96,6 +98,8 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
     fun updateLanguage(key: String) = vm.updateSettings { it.copy(lang = key) }
 
     /** Switches between test builds and the stable release, then looks for what the new choice offers. */
+    fun updateAllMeals(on: Boolean) = vm.updateSettings { it.copy(allMeals = on) }
+
     fun updateTestBuilds(on: Boolean) {
         vm.updateSettings { it.copy(testBuilds = on) }
         vm.checkForUpdate(manual = true)

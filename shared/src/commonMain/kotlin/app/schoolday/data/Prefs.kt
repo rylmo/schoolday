@@ -23,6 +23,8 @@ data class Settings(
     val lang: String = "system",
     /** iPhone: be offered test builds, not just the stable release. */
     val testBuilds: Boolean = false,
+    /** Show the dormitory's breakfast and dinner; the Lunch tab becomes Menu. */
+    val allMeals: Boolean = false,
 ) {
     val hasICanteen get() = icUser.isNotBlank() && icPass.isNotBlank()
 
@@ -50,6 +52,7 @@ class Prefs(private val kv: KeyValues, private val secure: SecureStore) {
         onboarded = kv.getBoolean("onboarded", kv.contains("myClass")),
         lang = kv.getString("lang") ?: "system",
         testBuilds = kv.getBoolean("testBuilds", false),
+        allMeals = kv.getBoolean("allMeals", false),
     )
 
     fun update(block: (Settings) -> Settings) {
@@ -63,6 +66,7 @@ class Prefs(private val kv: KeyValues, private val secure: SecureStore) {
         kv.putBoolean("onboarded", s.onboarded)
         kv.putString("lang", s.lang)
         kv.putBoolean("testBuilds", s.testBuilds)
+        kv.putBoolean("allMeals", s.allMeals)
         _state.value = s
     }
 

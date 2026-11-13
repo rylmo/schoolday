@@ -202,6 +202,12 @@ struct SettingsView: View {
         let themes = snap.themes
         let languages = snap.languages
         return Section(text.app) {
+            Toggle(isOn: Binding(get: { snap.allMeals }, set: { bridge.updateAllMeals(on: $0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(text.allMeals)
+                    Text(text.allMealsSub).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
             Picker(selection: Binding(get: { snap.theme }, set: { bridge.updateTheme(key: $0) })) {
                 ForEach(["", "dark", "light"], id: \.self) { group in
                     let rows = (0 ..< themes.count).filter { themes[$0].group == group }

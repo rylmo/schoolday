@@ -72,7 +72,7 @@ fun LunchScreen(vm: AppViewModel, sheetDate: String?, onSheetDate: (String?) -> 
         val chrome = LocalNativeChrome.current
         Box(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 22.dp, bottom = 12.dp), verticalAlignment = Alignment.Bottom) {
-                Text(S.lunchTitle, style = Type.display, color = T.text, modifier = Modifier.weight(1f))
+                Text(if (settings.allMeals) S.menu else S.lunchTitle, style = Type.display, color = T.text, modifier = Modifier.weight(1f))
                 if (chrome == null) {
                     if (menu != null) SourceLabel(menu, Modifier.padding(bottom = 12.dp, end = 4.dp))
                     IconBtn(Ic.External, S.openICanteen, { uri.openUri(ICanteenClient.LOGIN_PAGE) })
@@ -110,7 +110,7 @@ fun LunchScreen(vm: AppViewModel, sheetDate: String?, onSheetDate: (String?) -> 
                 } else {
                     val days = menu.days.filter { it.date >= today }.ifEmpty { menu.days }
                     items(days, key = { it.date }) { day ->
-                        DayBlock(menu, day, day.date == today, day.date in busy, Modifier.animateItem()) { opt ->
+                        DayBlock(menu, day, day.date == today, day.date in busy, settings.allMeals, Modifier.animateItem()) { opt ->
                             when {
                                 opt.ordered && opt.cancelUrl != null -> vm.lunchAction(day.date, opt.number, cancel = true)
                                 !opt.ordered && opt.orderUrl != null -> vm.lunchAction(day.date, opt.number, cancel = false)
@@ -141,7 +141,7 @@ private fun SourceLabel(menu: LunchMenu, modifier: Modifier) {
 }
 
 @Composable
-private fun DayBlock(menu: LunchMenu, day: LunchDay, isToday: Boolean, busy: Boolean, modifier: Modifier, onTap: (MealOption) -> Unit) {
+private fun DayBlock(menu: LunchMenu, day: LunchDay, isToday: Boolean, busy: Boolean, allMeals: Boolean, modifier: Modifier, onTap: (MealOption) -> Unit) {
     val date = LocalDate.parse(day.date)
     val ic = menu.source == LunchSource.ICanteen
     val locked = ic && day.options.none { it.orderUrl != null || it.cancelUrl != null }
@@ -166,6 +166,7 @@ private fun DayBlock(menu: LunchMenu, day: LunchDay, isToday: Boolean, busy: Boo
                     ic && day.ordered == null -> Text(S.notOrdered, style = Type.small, color = T.changed)
                 }
             }
+            if (allMeals) day.breakfast?.let { OtherMeal(S.breakfast, it) }
             day.soup?.let { Text(it, style = Type.small, color = T.text2) }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 day.options.forEach { opt ->
@@ -174,7 +175,17 @@ private fun DayBlock(menu: LunchMenu, day: LunchDay, isToday: Boolean, busy: Boo
                     MealLine(opt, highlight = opt.ordered || !ic && opt.number == 1, actionable, Modifier.alpha(if (opt.ordered) 1f else dim)) { onTap(opt) }
                 }
             }
+            if (allMeals) day.dinner?.let { OtherMeal(S.dinner, it) }
         }
+    }
+}
+
+/** Breakfast or dinner: a label and the dish, view only. */
+@Composable
+private fun OtherMeal(label: String, dish: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Eyebrow(label, color = T.text3)
+        Text(shortDish(dish), style = Type.small, color = T.text2)
     }
 }
 

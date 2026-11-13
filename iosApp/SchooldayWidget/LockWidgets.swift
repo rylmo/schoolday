@@ -74,12 +74,12 @@ struct LockProvider: AppIntentTimelineProvider {
 
     func placeholder(in context: Context) -> LockEntry { .sample }
 
-    func snapshot(for configuration: TimetableWidgetIntent, in context: Context) async -> LockEntry {
+    func snapshot(for configuration: LockWidgetIntent, in context: Context) async -> LockEntry {
         if context.isPreview, WidgetData.chosenClass(configuration.schoolClass) == nil { return .sample }
         return await entries(for: configuration, now: Date()).first ?? .sample
     }
 
-    func timeline(for configuration: TimetableWidgetIntent, in context: Context) async -> Timeline<LockEntry> {
+    func timeline(for configuration: LockWidgetIntent, in context: Context) async -> Timeline<LockEntry> {
         let list = await entries(for: configuration, now: Date())
         let last = list.last?.date ?? Date()
         return Timeline(entries: list, policy: .after(last.addingTimeInterval(60)))
@@ -87,7 +87,7 @@ struct LockProvider: AppIntentTimelineProvider {
 
     /// The countdown changes every minute; the others every few minutes (the progress bar itself
     /// moves continuously).
-    private func entries(for configuration: TimetableWidgetIntent, now: Date) async -> [LockEntry] {
+    private func entries(for configuration: LockWidgetIntent, now: Date) async -> [LockEntry] {
         guard let cls = WidgetData.chosenClass(configuration.schoolClass) else {
             return [LockEntry(date: now, reading: nil, isToday: false, lunch: nil, missingClass: true)]
         }
@@ -425,7 +425,7 @@ private struct LockContainer<Content: View>: View {
 
 struct CountdownWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "SchooldayCountdown", intent: TimetableWidgetIntent.self, provider: LockProvider(mode: .countdown)) { entry in
+        AppIntentConfiguration(kind: "SchooldayCountdown", intent: LockWidgetIntent.self, provider: LockProvider(mode: .countdown)) { entry in
             LockContainer(content: CountdownView(entry: entry))
         }
         .configurationDisplayName(W.t("Countdown", "Odpočet"))
@@ -436,7 +436,7 @@ struct CountdownWidget: Widget {
 
 struct LunchWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "SchooldayLunch", intent: TimetableWidgetIntent.self, provider: LockProvider(mode: .lunch)) { entry in
+        AppIntentConfiguration(kind: "SchooldayLunch", intent: LockWidgetIntent.self, provider: LockProvider(mode: .lunch)) { entry in
             LockContainer(content: LunchView(entry: entry))
         }
         .configurationDisplayName(W.t("Lunch", "Oběd"))
@@ -447,7 +447,7 @@ struct LunchWidget: Widget {
 
 struct NowNextWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "SchooldayNowNext", intent: TimetableWidgetIntent.self, provider: LockProvider(mode: .nowNext)) { entry in
+        AppIntentConfiguration(kind: "SchooldayNowNext", intent: LockWidgetIntent.self, provider: LockProvider(mode: .nowNext)) { entry in
             LockContainer(content: NowNextView(entry: entry))
         }
         .configurationDisplayName(W.t("Now & next", "Teď a potom"))
@@ -458,7 +458,7 @@ struct NowNextWidget: Widget {
 
 struct DayWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "SchooldayDay", intent: TimetableWidgetIntent.self, provider: LockProvider(mode: .day)) { entry in
+        AppIntentConfiguration(kind: "SchooldayDay", intent: LockWidgetIntent.self, provider: LockProvider(mode: .day)) { entry in
             LockContainer(content: DayView(entry: entry))
         }
         .configurationDisplayName(W.t("Day", "Den"))

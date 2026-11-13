@@ -272,6 +272,33 @@ enum WidgetCache {
         defaults.set(Date(), forKey: "offsetAt.\(classId)")
     }
 
+    // MARK: menu (the timetable widget's lunch button)
+
+    /// Whether the widget shows the menu; like a scrolled position it falls back after manualHold.
+    static func menuMode(_ classId: String, now: Date = Date()) -> Bool {
+        guard let at = defaults.object(forKey: "menuAt.\(classId)") as? Date, now.timeIntervalSince(at) < manualHold else { return false }
+        return defaults.bool(forKey: "menu.\(classId)")
+    }
+
+    static func setMenuMode(_ classId: String, _ on: Bool) {
+        defaults.set(on, forKey: "menu.\(classId)")
+        defaults.set(0, forKey: "menuOffset.\(classId)")
+        defaults.set(Date(), forKey: "menuAt.\(classId)")
+    }
+
+    /// Which day of the menu (0 = today or the next day with a menu).
+    static func menuOffset(_ classId: String) -> Int { defaults.integer(forKey: "menuOffset.\(classId)") }
+
+    static func setMenuOffset(_ classId: String, _ value: Int) {
+        defaults.set(max(value, 0), forKey: "menuOffset.\(classId)")
+        defaults.set(Date(), forKey: "menuAt.\(classId)")
+    }
+
+    /// When the menu goes back to the timetable.
+    static func menuExpiry(_ classId: String) -> Date? {
+        (defaults.object(forKey: "menuAt.\(classId)") as? Date)?.addingTimeInterval(manualHold)
+    }
+
     /// Pulls a position back inside the week without restarting the hold.
     static func clampOffset(_ classId: String, _ value: Int) {
         defaults.set(value, forKey: "offset.\(classId)")

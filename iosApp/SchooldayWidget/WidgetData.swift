@@ -49,6 +49,23 @@ enum WidgetData {
         var date: String
         var soup: String?
         var options: [Meal]
+        var breakfast: String?
+        var dinner: String?
+    }
+
+    /// The whole menu: the app's (iCanteen, with orders) when it shares one, else the school website's.
+    static func menuDays() async -> (days: [LunchDay], iCanteen: Bool) {
+        if let data = AppGroup.read(SharedFile.lunch), let menu = try? JSONDecoder().decode(Menu.self, from: data), !menu.days.isEmpty {
+            return (menu.days, menu.source == "ICanteen")
+        }
+        return (await SchoolMenu.days() ?? [], false)
+    }
+
+    /// Settings › Breakfast and dinner, shared by the app with your class.
+    static func allMeals() -> Bool {
+        struct Flags: Codable { var allMeals: Bool? }
+        guard let data = AppGroup.read(SharedFile.myClass), let flags = try? JSONDecoder().decode(Flags.self, from: data) else { return false }
+        return flags.allMeals ?? false
     }
 
     /// The app's lunch.json (its LunchMenu), or the school website's menu.
@@ -119,6 +136,8 @@ enum SchoolMenu {
         html.components(separatedBy: "class=\"jidelnicekDen\"").dropFirst().compactMap { block in
             guard let date = first(#"id="day-(\d{4}-\d{2}-\d{2})""#, in: block) else { return nil }
             var soup: String?
+            var breakfast: String?
+            var dinner: String?
             var options: [WidgetData.Meal] = []
             for container in block.components(separatedBy: "class=\"container\"").dropFirst() {
                 guard let label = first(#"shrinkedColumn[^>]*>\s*<span[^>]*>([^<]+)</span>"#, in: container),
@@ -127,12 +146,17 @@ enum SchoolMenu {
                 guard !name.isEmpty else { continue }
                 if label.lowercased().hasPrefix("polévka") {
                     soup = name
+                } else if label.lowercased().hasPrefix("snídaně") {
+                    breakfast = name
+                } else if label.lowercased().hasPrefix("večeře") {
+                    dinner = name
                 } else if label.lowercased().hasPrefix("oběd") {
                     let number = Int(label.filter(\.isNumber)) ?? options.count + 1
                     options.append(WidgetData.Meal(number: number, name: name, ordered: nil))
                 }
             }
-            return options.isEmpty ? nil : WidgetData.LunchDay(date: date, soup: soup, options: options.sorted { $0.number < $1.number })
+            return options.isEmpty ? nil : WidgetData.LunchDay(date: date, soup: soup, options: options.sorted { $0.number < $1.number },
+                                                               breakfast: breakfast, dinner: dinner)
         }
     }
 

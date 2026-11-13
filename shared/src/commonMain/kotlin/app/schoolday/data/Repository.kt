@@ -144,6 +144,8 @@ class Repository(private val platform: Platform, val prefs: Prefs) {
             val w = webDays[d.date] ?: return@map d
             d.copy(
                 soup = w.soup ?: d.soup,
+                breakfast = w.breakfast ?: d.breakfast,
+                dinner = w.dinner ?: d.dinner,
                 options = d.options.map { o ->
                     val wo = w.options.firstOrNull { it.number == o.number } ?: return@map o
                     o.copy(name = wo.name, allergens = wo.allergens)
