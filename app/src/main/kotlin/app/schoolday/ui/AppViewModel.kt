@@ -14,6 +14,10 @@ import app.schoolday.data.friendly
 import app.schoolday.update.UpdateInfo
 import app.schoolday.update.Updater
 import app.schoolday.notify.LunchNotifier
+import app.schoolday.BuildConfig
+import app.schoolday.data.Changelog
+import app.schoolday.data.ChangelogEntry
+import app.schoolday.widget.Widgets
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,6 +64,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _lunchBusy = MutableStateFlow<Set<String>>(emptySet())
     val lunchBusy = _lunchBusy.asStateFlow()
 
+    /** What's new since the last version you opened (empty for a fresh install). */
+    private val _notes = MutableStateFlow(
+        settings.value.let { s ->
+            if (!s.onboarded) emptyList()
+            else Changelog.since(if (s.notesSeen < 0) BuildConfig.VERSION_CODE - 1 else s.notesSeen, BuildConfig.VERSION_CODE)
+        },
+    )
+    val notes = _notes.asStateFlow()
+
+    fun dismissNotes() {
+        _notes.value = emptyList()
+        if (settings.value.notesSeen != BuildConfig.VERSION_CODE) repo.prefs.update { it.copy(notesSeen = BuildConfig.VERSION_CODE) }
+    }
+
     private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 8)
     val events = _events.asSharedFlow()
 
@@ -91,6 +109,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val r = repo.timetable(classId, mode, force)
             put(key, UiState(r.data, loading = false, error = r.error))
             if (classId == settings.value.myClass && mode == TimetableMode.Actual) LunchNotifier.reschedule(ctx)
+            if (classId == settings.value.myClass) Widgets.refresh(ctx)
         }
     }
 
@@ -101,6 +120,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val r = repo.lunch(force)
             _lunch.value = UiState(r.data, loading = false, error = r.error)
             LunchNotifier.reschedule(ctx)
+            Widgets.refresh(ctx)
         }
     }
 
@@ -162,10 +182,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (before.myClass != after.myClass) loadTimetable(after.myClass, TimetableMode.Actual, force = true)
         (after.shownClasses - before.shownClasses.toSet()).forEach { loadTimetable(it, TimetableMode.Actual) }
         if (before.lunchNotification != after.lunchNotification) LunchNotifier.reschedule(ctx)
+        // Menus saved by older versions have no breakfast or dinner yet.
+        if (after.showAllMeals && !before.showAllMeals) refreshLunch(force = true)
+        Widgets.refresh(ctx)
     }
 
     fun finishSetup(myClass: String, shown: List<String>) {
-        updateSettings { it.copy(myClass = myClass, shownClasses = shown, onboarded = true) }
+        updateSettings { it.copy(myClass = myClass, shownClasses = shown, onboarded = true, notesSeen = BuildConfig.VERSION_CODE) }
         refreshAll(force = true)
     }
 
@@ -227,6 +250,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _update.value = UpdateUi.Installing(info)
                 Updater.install(ctx, apk)
             } catch (e: Exception) {
+                Updater.note(ctx, "${info.versionName} failed before install: ${e::class.simpleName}: ${e.message}")
                 _update.value = UpdateUi.Failed(info, e.friendly())
             }
         }

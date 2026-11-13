@@ -145,6 +145,8 @@ class Repository(private val context: Context, val prefs: Prefs) {
             val w = webDays[d.date] ?: return@map d
             d.copy(
                 soup = w.soup ?: d.soup,
+                breakfast = w.breakfast ?: d.breakfast,
+                dinner = w.dinner ?: d.dinner,
                 options = d.options.map { o ->
                     val wo = w.options.firstOrNull { it.number == o.number } ?: return@map o
                     o.copy(name = wo.name, allergens = wo.allergens)
@@ -205,6 +207,9 @@ class Repository(private val context: Context, val prefs: Prefs) {
             appendLine("cache ${it.name}: ${(System.currentTimeMillis() - it.lastModified()) / 60_000} min old")
         }
         appendLine("Launch animation: ${Diag.intro}")
+        appendLine("Updates:")
+        val updates = app.schoolday.update.Updater.log(context)
+        if (updates.isEmpty()) appendLine("  none") else updates.forEach { appendLine("  $it") }
         appendLine("Recent errors:")
         if (errors.isEmpty()) appendLine("  none") else errors.forEach { appendLine("  $it") }
     }

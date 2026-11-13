@@ -183,5 +183,6 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         LunchNotifier.reschedule(context)
         SyncWorker.runNow(context)
+        app.schoolday.widget.Widgets.refresh(context)
     }
 }

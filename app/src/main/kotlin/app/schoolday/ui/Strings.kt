@@ -8,6 +8,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import app.schoolday.widget.WidgetKind
 
 /**
  * Every piece of text the app shows, in English and Czech. Kept in code (not Android
@@ -15,7 +16,7 @@ import java.util.Locale
  */
 open class Strings(val locale: Locale) {
     // navigation
-    open val today = "Today"; open val timetable = "Timetable"; open val lunch = "Lunch"; open val settings = "Settings"
+    open val today = "Today"; open val timetable = "Timetable"; open val lunch = "Lunch"; open val menuTab = "Menu"; open val settings = "Settings"
     open val back = "Back"; open val more = "More"; open val selected = "Selected"; open val undo = "Undo"
 
     // Today
@@ -35,7 +36,19 @@ open class Strings(val locale: Locale) {
     open val dayView = "Day view"; open val weekView = "Week view"; open val prevWeek = "Previous week"; open val nextWeek = "Next week"
     open val thisWeek = "This week"; open val permanent = "Permanent"; open val nextWeekLabel = "Next week"
     open val offlineTimetable = "Offline – showing saved timetable"; open val permanentTimetable = "Permanent timetable"
-    open val dayOff = "Day off"; open val noLessons = "No lessons"
+    open val dayOff = "Day off"; open val noLessons = "No lessons"; open val tomorrow = "Tomorrow"
+    open val whatsNew = "What's new"; open val whatsNewSub = "Changes in each version"; open val gotIt = "Got it"
+    open fun notes(e: app.schoolday.data.ChangelogEntry): List<String> = e.en
+    open val widgets = "Widgets"; open val widgetBackground = "Background"; open val widgetTransparency = "Transparency"
+    open fun widgetStyleName(id: String) = when (id) { "black" -> "Black"; "light" -> "Light"; else -> "Dark grey" }
+    open val widgetNoData = "Open Schoolday once to load your timetable"
+    open val widgetSettings = "Widget settings"; open val widgetShows = "This widget shows"
+    open val widgetSharedNote = "Background and transparency apply to all Schoolday widgets."
+    open fun widgetKindName(k: WidgetKind) = when (k) {
+        WidgetKind.Both -> "Timetable and menu"
+        WidgetKind.Timetable -> "Timetable"
+        WidgetKind.Menu -> "Menu"
+    }
     open val weekdays = listOf("Mon", "Tue", "Wed", "Thu", "Fri")
     open val free = "Free"; open val lunchAfterSchool = "Lunch after school"; open fun fromLower(t: String) = "from $t"; open fun untilLower(t: String) = "until $t"
     open fun groups(n: Int) = "$n groups"
@@ -50,7 +63,7 @@ open class Strings(val locale: Locale) {
     open val lunchTitle = "Lunch"; open val schoolWebsite = "School website"; open val openICanteen = "Open iCanteen website"
     open val viewOnlyLogin = "View only. Log in to iCanteen in Settings to order."; open val viewOnlyDown = "iCanteen is unavailable – view only."
     open val offlineMenu = "Offline – showing saved menu"; open val locked = "Locked"; open val notOrdered = "Not ordered"
-    open val noLunchInfo = "No lunch information for today"; open val soup = "Soup"; open fun lunchN(n: Int) = "Lunch $n"
+    open val noLunchInfo = "No lunch information for today"; open val soup = "Soup"; open val breakfast = "Breakfast"; open val dinner = "Dinner"; open val allMeals = "Breakfast and dinner"; open val allMealsSub = "Show them in the menu"; open fun lunchN(n: Int) = "Lunch $n"
     open fun ordered(n: Int, day: LocalDate) = "Lunch $n ordered for ${dayName(day)}"
     open fun cancelled(day: LocalDate) = "Lunch cancelled for ${dayName(day)}"
 
@@ -85,7 +98,7 @@ open class Strings(val locale: Locale) {
     open val errBadLogin = "iCanteen rejected the username or password"; open val errSession = "iCanteen session could not be opened"; open val errExpired = "Session expired – try again"
 
     // app updates
-    open val updateTitle = "Update available"; open val updateNow = "Update"; open val updateLater = "Later"
+    open val updateTitle = "Update available"; open val updateNow = "Update"; open val updateBrowser = "Download it in your browser instead"; open val updateLater = "Later"
     open val updateDownloading = "Downloading…"; open val updateInstalling = "Installing…"
     open val updateCloses = "The app closes while it installs. Open it again afterwards."
     open val updateAllow = "Allow Schoolday to install updates, then come back."; open val openSettings = "Open settings"
@@ -106,7 +119,7 @@ open class Strings(val locale: Locale) {
 object English : Strings(Locale.ENGLISH)
 
 object Czech : Strings(Locale.forLanguageTag("cs")) {
-    override val today = "Dnes"; override val timetable = "Rozvrh"; override val lunch = "Oběd"; override val settings = "Nastavení"
+    override val today = "Dnes"; override val timetable = "Rozvrh"; override val lunch = "Oběd"; override val menuTab = "Jídelníček"; override val settings = "Nastavení"
     override val back = "Zpět"; override val more = "Další"; override val selected = "Vybráno"; override val undo = "Zpět"
 
     override val classes = "Třídy"; override val legendLunch = "oběd"; override val legendSame = "stejně jako ty"
@@ -127,7 +140,19 @@ object Czech : Strings(Locale.forLanguageTag("cs")) {
     override val dayView = "Den"; override val weekView = "Týden"; override val prevWeek = "Předchozí týden"; override val nextWeek = "Další týden"
     override val thisWeek = "Tento týden"; override val permanent = "Stálý"; override val nextWeekLabel = "Příští týden"
     override val offlineTimetable = "Offline – zobrazuji uložený rozvrh"; override val permanentTimetable = "Stálý rozvrh"
-    override val dayOff = "Volno"; override val noLessons = "Žádné hodiny"
+    override val dayOff = "Volno"; override val noLessons = "Žádné hodiny"; override val tomorrow = "Zítra"
+    override val whatsNew = "Co je nového"; override val whatsNewSub = "Změny v jednotlivých verzích"; override val gotIt = "Rozumím"
+    override fun notes(e: app.schoolday.data.ChangelogEntry): List<String> = e.cs
+    override val widgets = "Widgety"; override val widgetBackground = "Pozadí"; override val widgetTransparency = "Průhlednost"
+    override fun widgetStyleName(id: String) = when (id) { "black" -> "Černá"; "light" -> "Světlá"; else -> "Tmavě šedá" }
+    override val widgetNoData = "Otevři Schoolday, aby se načetl rozvrh"
+    override val widgetSettings = "Nastavení widgetu"; override val widgetShows = "Widget zobrazuje"
+    override val widgetSharedNote = "Pozadí a průhlednost platí pro všechny widgety Schoolday."
+    override fun widgetKindName(k: WidgetKind) = when (k) {
+        WidgetKind.Both -> "Rozvrh a jídelníček"
+        WidgetKind.Timetable -> "Rozvrh"
+        WidgetKind.Menu -> "Jídelníček"
+    }
     override val weekdays = listOf("Po", "Út", "St", "Čt", "Pá")
     override val free = "Volno"; override val lunchAfterSchool = "Oběd po vyučování"; override fun fromLower(t: String) = "od $t"; override fun untilLower(t: String) = "do $t"
     override fun groups(n: Int) = if (n in 2..4) "$n skupiny" else "$n skupin"
@@ -140,7 +165,7 @@ object Czech : Strings(Locale.forLanguageTag("cs")) {
     override val lunchTitle = "Obědy"; override val schoolWebsite = "Web školy"; override val openICanteen = "Otevřít iCanteen"
     override val viewOnlyLogin = "Jen prohlížení. Pro objednávání se přihlas do iCanteen v Nastavení."; override val viewOnlyDown = "iCanteen nefunguje – jen prohlížení."
     override val offlineMenu = "Offline – zobrazuji uložený jídelníček"; override val locked = "Uzamčeno"; override val notOrdered = "Neobjednáno"
-    override val noLunchInfo = "Na dnešek nejsou informace o obědě"; override val soup = "Polévka"; override fun lunchN(n: Int) = "Oběd $n"
+    override val noLunchInfo = "Na dnešek nejsou informace o obědě"; override val soup = "Polévka"; override val breakfast = "Snídaně"; override val dinner = "Večeře"; override val allMeals = "Snídaně a večeře"; override val allMealsSub = "Zobrazit je v jídelníčku"; override fun lunchN(n: Int) = "Oběd $n"
     private fun accusative(d: LocalDate) = when (d.dayOfWeek) {
         DayOfWeek.MONDAY -> "pondělí"; DayOfWeek.TUESDAY -> "úterý"; DayOfWeek.WEDNESDAY -> "středu"; DayOfWeek.THURSDAY -> "čtvrtek"
         DayOfWeek.FRIDAY -> "pátek"; DayOfWeek.SATURDAY -> "sobotu"; else -> "neděli"
@@ -175,7 +200,7 @@ object Czech : Strings(Locale.forLanguageTag("cs")) {
     override val errNoInternet = "Bez připojení k internetu"; override val errTimeout = "Server neodpověděl včas"; override val errConnect = "Nepodařilo se spojit se serverem"
     override val errBadLogin = "iCanteen odmítl jméno nebo heslo"; override val errSession = "Nepodařilo se přihlásit do iCanteen"; override val errExpired = "Přihlášení vypršelo – zkus to znovu"
 
-    override val updateTitle = "Je dostupná aktualizace"; override val updateNow = "Aktualizovat"; override val updateLater = "Později"
+    override val updateTitle = "Je dostupná aktualizace"; override val updateNow = "Aktualizovat"; override val updateBrowser = "Stáhnout v prohlížeči"; override val updateLater = "Později"
     override val updateDownloading = "Stahuji…"; override val updateInstalling = "Instaluji…"
     override val updateCloses = "Během instalace se aplikace zavře. Potom ji znovu otevři."
     override val updateAllow = "Povol Schoolday instalovat aktualizace a pak se vrať."; override val openSettings = "Otevřít nastavení"

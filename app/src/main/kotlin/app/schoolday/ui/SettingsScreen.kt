@@ -50,6 +50,12 @@ import app.schoolday.ui.theme.Ic
 import app.schoolday.ui.theme.T
 import app.schoolday.ui.theme.Type
 import kotlinx.coroutines.launch
+import app.schoolday.data.Changelog
+import app.schoolday.widget.WidgetStyle
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.runtime.mutableFloatStateOf
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
@@ -58,6 +64,7 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
     val ctx = LocalContext.current
     var picker by remember { mutableStateOf<String?>(null) } // "add" | "mine" | "theme"
     var copied by remember { mutableStateOf(false) }
+    var showNotes by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(T.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.padding(start = 8.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -92,6 +99,9 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                 SettingRow(S.lunchNotification, S.lunchNotificationSub, onLongClick = { LunchNotifier.showTest(ctx) }) {
                     Toggle(settings.lunchNotification) { v -> vm.updateSettings { it.copy(lunchNotification = v) } }
                 }
+                SettingRow(S.allMeals, S.allMealsSub) {
+                    Toggle(settings.showAllMeals) { v -> vm.updateSettings { it.copy(showAllMeals = v) } }
+                }
                 val theme = AppTheme.of(settings.theme)
                 SettingRow(S.colours, S.themeName(theme.id), onClick = { picker = "theme" }) {
                     Swatch(theme)
@@ -101,6 +111,8 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                     Icon(Ic.ChevronDown, null, Modifier.size(18.dp), tint = T.text2)
                 }
             }
+
+            Section(S.widgets) { WidgetSettings(vm, settings.widgetStyle, settings.widgetOpacity) { picker = "widget" } }
 
             Section(S.help) {
                 val update by vm.update.collectAsStateWithLifecycle()
@@ -114,6 +126,7 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                     },
                     onClick = { vm.checkForUpdate(manual = true) },
                 )
+                SettingRow(S.whatsNew, S.whatsNewSub, onClick = { showNotes = true })
                 SettingRow(S.copyDebug, if (copied) S.copied else S.copyDebugSub, onClick = {
                     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     cm.setPrimaryClip(ClipData.newPlainText("Schoolday debug info", vm.debugInfo()))
@@ -129,6 +142,8 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
             )
         }
     }
+
+    if (showNotes) WhatsNewSheet(Changelog.entries) { showNotes = false; vm.dismissNotes() }
 
     when (picker) {
         "add" -> PickerSheet(
@@ -148,11 +163,54 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
             section = { when (it.dark) { null -> null; true -> S.dark; false -> S.light } },
             leading = { Swatch(it) },
         )
+        "widget" -> PickerSheet(
+            S.widgetBackground, WidgetStyle.entries, { it.id == settings.widgetStyle }, { S.widgetStyleName(it.id) },
+            onPick = { w -> vm.updateSettings { it.copy(widgetStyle = w.id) }; picker = null },
+            onDismiss = { picker = null },
+            leading = { Box(Modifier.size(20.dp).clip(CircleShape).background(it.bg).border(1.dp, T.lineStrong, CircleShape)) },
+        )
         "lang" -> PickerSheet(
             S.language, listOf("system", "cs", "en"), { it == settings.lang }, { langLabel(it) },
             onPick = { l -> vm.updateSettings { it.copy(lang = l) }; picker = null },
             onDismiss = { picker = null },
         )
+    }
+}
+
+/** Background and transparency of the home screen widgets, with a preview row. */
+@Composable
+fun WidgetSettings(vm: AppViewModel, styleId: String, opacity: Int, onPickStyle: () -> Unit) {
+    val style = WidgetStyle.of(styleId)
+    var transparency by remember(opacity) { mutableFloatStateOf((100 - opacity).toFloat()) }
+    SettingRow(S.widgetBackground, S.widgetStyleName(style.id), onClick = onPickStyle) {
+        Box(Modifier.size(20.dp).clip(CircleShape).background(style.bg).border(1.dp, T.lineStrong, CircleShape))
+        Icon(Ic.ChevronDown, null, Modifier.padding(start = 6.dp).size(18.dp), tint = T.text2)
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(S.widgetTransparency, style = Type.body, color = T.text, modifier = Modifier.weight(1f))
+        Text("${transparency.roundToInt()} %", style = Type.bodyStrong, color = T.text2)
+    }
+    Slider(
+        value = transparency, onValueChange = { transparency = (it / 5f).roundToInt() * 5f }, valueRange = 0f..100f,
+        onValueChangeFinished = { vm.updateSettings { it.copy(widgetOpacity = 100 - transparency.roundToInt()) } },
+        colors = SliderDefaults.colors(thumbColor = T.accent, activeTrackColor = T.accent, inactiveTrackColor = T.lineStrong),
+    )
+    // Preview: one lesson row on the chosen background, over a stripe to show the transparency.
+    Box(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp).clip(RoundedCornerShape(20.dp)).background(T.raised)) {
+        Box(Modifier.fillMaxWidth().height(24.dp).background(T.accent.copy(alpha = 0.35f)).align(Alignment.Center))
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                .background(style.bg.copy(alpha = (100 - transparency) / 100f)).padding(10.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(style.row).padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("2", style = Type.heading, color = style.text)
+                Column { Text("8:50", style = Type.small, color = style.text2); Text("9:35", style = Type.small, color = style.text2) }
+                Column { Text("Základy elektrotechniky", style = Type.bodyStrong, color = style.text); Text("V311 | Ing. Evžen Žabčík", style = Type.small, color = style.text2) }
+            }
+        }
     }
 }
 

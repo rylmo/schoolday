@@ -1,0 +1,8 @@
+<resources>
+    <string name="widget_both">Rozvrh a jídelníček</string>
+    <string name="widget_both_desc">Tvoje hodiny s přepínačem na jídelníček</string>
+    <string name="widget_timetable">Rozvrh</string>
+    <string name="widget_timetable_desc">Tvoje hodiny od teď</string>
+    <string name="widget_menu">Jídelníček</string>
+    <string name="widget_menu_desc">Obědy na další dny</string>
+</resources>

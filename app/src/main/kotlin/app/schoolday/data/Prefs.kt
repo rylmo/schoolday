@@ -22,12 +22,19 @@ data class Settings(
     /** Your own class – used to find your lunch break and for "same as you". */
     val myClass: String = DEFAULT_MY_CLASS,
     val lunchNotification: Boolean = true,
+    /** Show breakfast and dinner too; the Lunch tab then becomes Menu. */
+    val showAllMeals: Boolean = false,
     /** Colour theme id, see AppTheme. */
     val theme: String = "midnight",
     /** First-launch setup finished. */
     val onboarded: Boolean = false,
     /** "system", "en" or "cs". */
     val lang: String = "system",
+    /** versionCode whose What's new was last seen (-1: never, e.g. updated from before 1.3). */
+    val notesSeen: Int = -1,
+    /** Home screen widgets: background (see WidgetStyle) and how opaque it is, 0–100. */
+    val widgetStyle: String = "dark",
+    val widgetOpacity: Int = 90,
 ) {
     val hasICanteen get() = icUser.isNotBlank() && icPass.isNotBlank()
 
@@ -60,10 +67,14 @@ class Prefs(context: Context) {
                 ?: Settings().shownClasses,
             myClass = sp.getString("myClass", null) ?: Settings.DEFAULT_MY_CLASS,
             lunchNotification = sp.getBoolean("lunchNotification", true),
+            showAllMeals = sp.getBoolean("showAllMeals", false),
             theme = sp.getString("theme", null) ?: if (sp.getBoolean("systemColors", false)) "system" else "midnight",
             // Anyone upgrading from 1.0 already set the app up.
             onboarded = sp.getBoolean("onboarded", sp.contains("myClass")),
             lang = sp.getString("lang", null) ?: "system",
+            notesSeen = sp.getInt("notesSeen", -1),
+            widgetStyle = sp.getString("widgetStyle", null) ?: "dark",
+            widgetOpacity = sp.getInt("widgetOpacity", 90),
         )
     }
 
@@ -78,9 +89,13 @@ class Prefs(context: Context) {
             .putString("myClass", s.myClass)
             .remove("showMyClass") // old setting: your class is now always in Timetable
             .putBoolean("lunchNotification", s.lunchNotification)
+            .putBoolean("showAllMeals", s.showAllMeals)
             .putString("theme", s.theme)
             .putBoolean("onboarded", s.onboarded)
             .putString("lang", s.lang)
+            .putInt("notesSeen", s.notesSeen)
+            .putString("widgetStyle", s.widgetStyle)
+            .putInt("widgetOpacity", s.widgetOpacity)
             .apply()
         _state.value = s
     }

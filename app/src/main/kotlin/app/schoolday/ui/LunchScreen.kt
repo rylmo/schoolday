@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -68,7 +69,7 @@ fun LunchScreen(vm: AppViewModel, sheetDate: String?, onSheetDate: (String?) -> 
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 22.dp, bottom = 12.dp), verticalAlignment = Alignment.Bottom) {
-            Text(S.lunchTitle, style = Type.display, color = T.text, modifier = Modifier.weight(1f))
+            Text(if (settings.showAllMeals) S.menuTab else S.lunchTitle, style = Type.display, color = T.text, modifier = Modifier.weight(1f))
             if (menu != null) {
                 Row(Modifier.padding(bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(if (menu.source == LunchSource.ICanteen) T.good else T.text3))
@@ -105,7 +106,7 @@ fun LunchScreen(vm: AppViewModel, sheetDate: String?, onSheetDate: (String?) -> 
                 } else {
                     val days = menu.days.filter { it.date >= today }.ifEmpty { menu.days }
                     items(days, key = { it.date }) { day ->
-                        DayBlock(menu, day, day.date == today, day.date in busy, Modifier.animateItem()) { opt ->
+                        DayBlock(menu, day, day.date == today, day.date in busy, settings.showAllMeals, Modifier.animateItem()) { opt ->
                             when {
                                 opt.ordered && opt.cancelUrl != null -> vm.lunchAction(day.date, opt.number, cancel = true)
                                 !opt.ordered && opt.orderUrl != null -> vm.lunchAction(day.date, opt.number, cancel = false)
@@ -122,12 +123,14 @@ fun LunchScreen(vm: AppViewModel, sheetDate: String?, onSheetDate: (String?) -> 
         val day = menu?.days?.firstOrNull { it.date == sheetDate }
         ModalBottomSheet(onDismissRequest = { onSheetDate(null) }, containerColor = T.raised, contentColor = T.text, dragHandle = {
             Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 36.dp, height = 4.dp).clip(CircleShape).background(T.lineStrong))
-        }) { TodayLunchDetail(menu, day) }
+        }) { TodayLunchDetail(menu, day, settings.showAllMeals) }
     }
 }
 
 @Composable
-private fun DayBlock(menu: LunchMenu, day: LunchDay, isToday: Boolean, busy: Boolean, modifier: Modifier, onTap: (MealOption) -> Unit) {
+private fun DayBlock(
+    menu: LunchMenu, day: LunchDay, isToday: Boolean, busy: Boolean, allMeals: Boolean, modifier: Modifier, onTap: (MealOption) -> Unit,
+) {
     val date = LocalDate.parse(day.date)
     val ic = menu.source == LunchSource.ICanteen
     val locked = ic && day.options.none { it.orderUrl != null || it.cancelUrl != null }
@@ -152,6 +155,7 @@ private fun DayBlock(menu: LunchMenu, day: LunchDay, isToday: Boolean, busy: Boo
                     ic && day.ordered == null -> Text(S.notOrdered, style = Type.small, color = T.changed)
                 }
             }
+            if (allMeals) day.breakfast?.let { OtherMeal(S.breakfast, it) }
             day.soup?.let { Text(it, style = Type.small, color = T.text2) }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 day.options.forEach { opt ->
@@ -160,6 +164,7 @@ private fun DayBlock(menu: LunchMenu, day: LunchDay, isToday: Boolean, busy: Boo
                     MealLine(opt, highlight = opt.ordered || !ic && opt.number == 1, actionable, Modifier.alpha(if (opt.ordered) 1f else dim)) { onTap(opt) }
                 }
             }
+            if (allMeals) day.dinner?.let { OtherMeal(S.dinner, it) }
         }
     }
 }
@@ -186,8 +191,20 @@ private fun MealLine(opt: MealOption, highlight: Boolean, actionable: Boolean, m
     }
 }
 
+/** Breakfast or dinner: a quiet line with its label, for reading only. */
 @Composable
-private fun TodayLunchDetail(menu: LunchMenu?, day: LunchDay?) {
+private fun OtherMeal(label: String, dish: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+        Text(
+            label.uppercase(), style = Type.tiny.copy(fontWeight = FontWeight.SemiBold), color = T.text3,
+            modifier = Modifier.width(72.dp).padding(top = 3.dp),
+        )
+        Text(shortDish(dish), style = Type.small, color = T.text2, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun TodayLunchDetail(menu: LunchMenu?, day: LunchDay?, allMeals: Boolean) {
     Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (menu == null || day == null) {
             Text(S.noLunchInfo, style = Type.heading, color = T.text)
@@ -196,11 +213,17 @@ private fun TodayLunchDetail(menu: LunchMenu?, day: LunchDay?) {
         val mine = menu.myMeal(day)
         Eyebrow(S.today, color = T.accent)
         Text(mine?.first?.let { shortDish(it.name) } ?: S.nothingOrdered, style = Type.title, color = T.text)
+        if (allMeals) day.breakfast?.let {
+            Column { Eyebrow(S.breakfast, color = T.text3); Text(shortDish(it), style = Type.body, color = T.text) }
+        }
         day.soup?.let {
             Column { Eyebrow(S.soup, color = T.text3); Text(it, style = Type.body, color = T.text) }
         }
         day.options.filter { it.number != mine?.first?.number }.forEach {
             Column { Eyebrow(S.lunchN(it.number), color = T.text3); Text(shortDish(it.name), style = Type.body, color = T.text) }
+        }
+        if (allMeals) day.dinner?.let {
+            Column { Eyebrow(S.dinner, color = T.text3); Text(shortDish(it), style = Type.body, color = T.text) }
         }
     }
 }

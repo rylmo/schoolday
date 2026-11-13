@@ -120,12 +120,24 @@ class ICanteenClient(
 
     private fun parseDay(date: String, block: Element): LunchDay? {
         var soup: String? = null
+        var breakfast: String? = null
+        var dinner: String? = null
         val options = mutableListOf<MealOption>()
 
         for (row in block.select(".jidelnicekItemWrapper")) {
             val button = row.selectFirst(".jidWrapLeft a") ?: row.selectFirst("[onclick*=dbProcessOrder]")
             val label = row.selectFirst(".smallBoldTitle")?.text().orEmpty()
-            val number = mealLabel.find(label)?.groupValues?.get(1)?.toIntOrNull() ?: continue // breakfast/dinner
+            val number = mealLabel.find(label)?.groupValues?.get(1)?.toIntOrNull()
+            if (number == null) {
+                // Breakfast and dinner: shown only, never ordered from the app.
+                val text = row.selectFirst(".jidWrapCenter")?.clone()?.apply { select(".textGrey").remove() }?.text()?.let(::tidy)
+                when {
+                    text.isNullOrEmpty() -> Unit
+                    label.startsWith("Snídaně", ignoreCase = true) -> breakfast = text
+                    label.startsWith("Večeře", ignoreCase = true) -> dinner = text
+                }
+                continue
+            }
 
             val link = button?.attr("onclick")?.let { orderLink.find(it)?.groupValues?.get(1)?.replace("&amp;", "&") }
             val type = link?.let { Regex("""[?&]type=(\w+)""").find(it)?.groupValues?.get(1) }
@@ -150,7 +162,7 @@ class ICanteenClient(
             )
         }
         if (options.isEmpty()) return null
-        return LunchDay(date, soup, options.distinctBy { it.number }.sortedBy { it.number })
+        return LunchDay(date, soup, options.distinctBy { it.number }.sortedBy { it.number }, breakfast, dinner)
     }
 
     /** "Špagety po milánsku ,  jarní cibulka ,  nápoje" → "Špagety po milánsku, jarní cibulka, nápoje" */

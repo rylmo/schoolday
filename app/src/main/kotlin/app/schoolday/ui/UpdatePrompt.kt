@@ -37,7 +37,7 @@ import app.schoolday.ui.theme.Type
 
 /** The "update available" panel. Shown above everything once the startup animation is done. */
 @Composable
-fun UpdatePrompt(state: UpdateUi, onUpdate: () -> Unit, onLater: () -> Unit, onAllow: () -> Unit) {
+fun UpdatePrompt(state: UpdateUi, onUpdate: () -> Unit, onLater: () -> Unit, onAllow: () -> Unit, onBrowser: () -> Unit) {
     val visible = state is UpdateUi.Available || state is UpdateUi.NeedsPermission ||
         state is UpdateUi.Downloading || state is UpdateUi.Installing || state is UpdateUi.Failed
     val canDismiss = state !is UpdateUi.Downloading && state !is UpdateUi.Installing
@@ -73,7 +73,14 @@ fun UpdatePrompt(state: UpdateUi, onUpdate: () -> Unit, onLater: () -> Unit, onA
                 when (state) {
                     is UpdateUi.Available -> Text(S.updateCloses, style = Type.body, color = T.text2)
                     is UpdateUi.NeedsPermission -> Text(S.updateAllow, style = Type.body, color = T.text2)
-                    is UpdateUi.Failed -> Text(state.message, style = Type.body, color = T.removed)
+                    is UpdateUi.Failed -> {
+                        Text(state.message, style = Type.body, color = T.removed)
+                        // If installing from the app keeps failing on a phone, the APK can still be installed by hand.
+                        if (state.info != null) Text(
+                            S.updateBrowser, style = Type.bodyStrong, color = T.accent,
+                            modifier = Modifier.pressable(onClick = onBrowser).padding(vertical = 6.dp),
+                        )
+                    }
                     is UpdateUi.Downloading -> ProgressLine(state.progress)
                     is UpdateUi.Installing -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = T.accent)

@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">Schoolday</string>
+    <string name="widget_both">Timetable and menu</string>
+    <string name="widget_both_desc">Your lessons, with a switch to the menu</string>
+    <string name="widget_timetable">Timetable</string>
+    <string name="widget_timetable_desc">Your lessons from now on</string>
+    <string name="widget_menu">Menu</string>
+    <string name="widget_menu_desc">Lunches for the coming days</string>
 </resources>

@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.schoolday.update.Updater
 import app.schoolday.data.Diag
 import app.schoolday.notify.LunchNotifier
 import app.schoolday.ui.theme.AppTheme
@@ -117,7 +118,14 @@ class MainActivity : ComponentActivity() {
                     if (!intro.finished) IntroOverlay(intro)
                     else {
                         val update by vm.update.collectAsStateWithLifecycle()
-                        UpdatePrompt(update, onUpdate = vm::startUpdate, onLater = vm::dismissUpdate, onAllow = ::openInstallSettings)
+                        val notes by vm.notes.collectAsStateWithLifecycle()
+                        val updateShown = update is UpdateUi.Available || update is UpdateUi.NeedsPermission ||
+                            update is UpdateUi.Downloading || update is UpdateUi.Installing || update is UpdateUi.Failed
+                        if (settings.onboarded && notes.isNotEmpty() && !updateShown) WhatsNewSheet(notes, vm::dismissNotes)
+                        UpdatePrompt(
+                            update, onUpdate = vm::startUpdate, onLater = vm::dismissUpdate, onAllow = ::openInstallSettings,
+                            onBrowser = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Updater.releasePage))) },
+                        )
                     }
                 }
             }
@@ -159,12 +167,18 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
     val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(openRequest.value) {
-        if (openRequest.value == LunchNotifier.OPEN_LUNCH_TODAY) {
-            showSettings = false
-            tab = Tab.Lunch
-            lunchSheetDate = LocalDate.now().toString()
-            openRequest.value = null
+        when (openRequest.value) {
+            LunchNotifier.OPEN_LUNCH_TODAY -> {
+                showSettings = false
+                tab = Tab.Lunch
+                lunchSheetDate = LocalDate.now().toString()
+            }
+            // tapped a widget
+            app.schoolday.widget.OPEN_TIMETABLE -> { showSettings = false; selectedClass = settings.myClass; tab = Tab.Timetable }
+            app.schoolday.widget.OPEN_MENU -> { showSettings = false; tab = Tab.Lunch }
+            else -> return@LaunchedEffect
         }
+        openRequest.value = null
     }
     LaunchedEffect(Unit) {
         vm.events.collect { e ->
@@ -211,7 +225,7 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
                 }
             }
             NavBar(
-                listOf(S.today to Ic.Today, S.timetable to Ic.Timetable, S.lunch to Ic.Lunch),
+                listOf(S.today to Ic.Today, S.timetable to Ic.Timetable, (if (settings.showAllMeals) S.menuTab else S.lunch) to Ic.Lunch),
                 tab.ordinal,
             ) {
                 val target = Tab.entries[it]

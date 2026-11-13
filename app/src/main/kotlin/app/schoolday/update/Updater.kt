@@ -41,6 +41,22 @@ object Updater {
 
     val enabled: Boolean get() = BuildConfig.UPDATE_MANIFEST_URL.isNotEmpty()
 
+    /** The latest release's page, for installing the APK by hand. */
+    val releasePage: String get() = BuildConfig.UPDATE_MANIFEST_URL.substringBefore("/download/")
+
+    private const val LOG = "updateLog"
+
+    /** Remembers an update step (kept across restarts) for Settings > Copy debug info. */
+    fun note(ctx: Context, line: String) {
+        val sp = ctx.getSharedPreferences("diag", Context.MODE_PRIVATE)
+        val stamp = java.time.LocalDateTime.now().withNano(0).toString().replace('T', ' ')
+        val lines = (sp.getString(LOG, "").orEmpty().lines().filter { it.isNotBlank() } + "$stamp $line").takeLast(8)
+        sp.edit().putString(LOG, lines.joinToString("\n")).apply()
+    }
+
+    fun log(ctx: Context): List<String> =
+        ctx.getSharedPreferences("diag", Context.MODE_PRIVATE).getString(LOG, "").orEmpty().lines().filter { it.isNotBlank() }
+
     /** Set when the system reports a failed install (the app is still running to show it). */
     private val _installError = MutableStateFlow<String?>(null)
     val installError = _installError.asStateFlow()
@@ -113,13 +129,20 @@ object Updater {
             )
             session.commit(callback.intentSender)
         }
+        note(ctx, "installing ${apk.name} (${apk.length() / 1024} kB)")
     }
 }
 
 /** Receives install progress from Android: shows its confirm screen, or reports a failure. */
 class UpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        // Android's own reason (e.g. "INSTALL_FAILED_ABORTED: User rejected permissions") is what
+        // tells a phone-specific block apart from a real cancel, so it goes into the debug info.
+        val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+        val legacy = intent.getIntExtra("android.content.pm.extra.LEGACY_STATUS", 0)
+        Updater.note(context, "status ${statusName(status)}" + (if (legacy != 0) " ($legacy)" else "") + (message?.let { ": $it" } ?: ""))
+        when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)?.let {
                     context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -129,5 +152,19 @@ class UpdateReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_FAILURE_ABORTED -> Updater.reportInstallError(S.updateCancelled)
             else -> Updater.reportInstallError(S.updateFailed)
         }
+    }
+
+    private fun statusName(status: Int) = when (status) {
+        PackageInstaller.STATUS_PENDING_USER_ACTION -> "PENDING_USER_ACTION"
+        PackageInstaller.STATUS_SUCCESS -> "SUCCESS"
+        PackageInstaller.STATUS_FAILURE -> "FAILURE"
+        PackageInstaller.STATUS_FAILURE_BLOCKED -> "FAILURE_BLOCKED"
+        PackageInstaller.STATUS_FAILURE_ABORTED -> "FAILURE_ABORTED"
+        PackageInstaller.STATUS_FAILURE_INVALID -> "FAILURE_INVALID"
+        PackageInstaller.STATUS_FAILURE_CONFLICT -> "FAILURE_CONFLICT"
+        PackageInstaller.STATUS_FAILURE_STORAGE -> "FAILURE_STORAGE"
+        PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "FAILURE_INCOMPATIBLE"
+        PackageInstaller.STATUS_FAILURE_TIMEOUT -> "FAILURE_TIMEOUT"
+        else -> status.toString()
     }
 }

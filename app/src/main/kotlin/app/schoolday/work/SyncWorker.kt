@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import app.schoolday.app
 import app.schoolday.data.TimetableMode
 import app.schoolday.notify.LunchNotifier
+import app.schoolday.widget.Widgets
 import java.util.concurrent.TimeUnit
 
 /**
@@ -29,6 +30,7 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
         s.shownClasses.forEach { app.repo.timetable(it, TimetableMode.Actual, force = true) }
         app.repo.lunch(force = true)
         LunchNotifier.reschedule(applicationContext)
+        Widgets.refreshNow(applicationContext)
         return Result.success()
     }
 
