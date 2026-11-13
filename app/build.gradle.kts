@@ -16,8 +16,8 @@ android {
         applicationId = "app.schoolday"
         minSdk = 31 // Android 12
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.2.5"
+        versionCode = 7
+        versionName = "1.3"
         // Where the app looks for updates; set in gradle.properties (empty = updates off).
         buildConfigField("String", "UPDATE_MANIFEST_URL", "\"${providers.gradleProperty("updateManifestUrl").getOrElse("")}\"")
     }
