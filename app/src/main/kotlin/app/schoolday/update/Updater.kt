@@ -8,6 +8,7 @@ import android.content.pm.PackageInstaller
 import android.os.Build
 import androidx.core.content.IntentCompat
 import app.schoolday.BuildConfig
+import app.schoolday.data.Diag
 import app.schoolday.data.Http
 import app.schoolday.ui.S
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +47,16 @@ object Updater {
     val installError = _installError.asStateFlow()
     fun clearInstallError() { _installError.value = null }
     internal fun reportInstallError(message: String) { _installError.value = message }
+
+    /**
+     * Android's "Update this app?" screen, waiting to be opened by the visible activity.
+     * Opening it from the receiver let Android's installer lose track of who asked, and it
+     * then cancelled the install without ever showing the screen.
+     */
+    private val _confirm = MutableStateFlow<Intent?>(null)
+    val confirm = _confirm.asStateFlow()
+    internal fun requestConfirm(intent: Intent) { _confirm.value = intent }
+    fun takeConfirm(): Intent? = _confirm.value.also { _confirm.value = null }
 
     /** The newer version on offer, or null if up to date. Throws on network problems. */
     suspend fun check(): UpdateInfo? {
@@ -93,6 +104,7 @@ object Updater {
 
     /** Hands the verified APK to Android. The app is closed by the system while it installs. */
     suspend fun install(ctx: Context, apk: File) = withContext(Dispatchers.IO) {
+        Diag.update = "installing ${apk.name}"
         val installer = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(ctx.packageName)
@@ -119,15 +131,16 @@ object Updater {
 /** Receives install progress from Android: shows its confirm screen, or reports a failure. */
 class UpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        val detail = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+        Diag.update = "status $status" + (detail?.let { ": $it" } ?: "")
+        when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)?.let {
-                    context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }
+                IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)?.let(Updater::requestConfirm)
             }
             PackageInstaller.STATUS_SUCCESS -> Unit
             PackageInstaller.STATUS_FAILURE_ABORTED -> Updater.reportInstallError(S.updateCancelled)
-            else -> Updater.reportInstallError(S.updateFailed)
+            else -> Updater.reportInstallError(S.updateFailed + (detail?.let { "\n$it" } ?: ""))
         }
     }
 }

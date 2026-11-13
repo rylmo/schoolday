@@ -1,6 +1,8 @@
 package app.schoolday.ui
 
 import android.Manifest
+import android.app.ActivityOptions
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -51,15 +53,20 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import app.schoolday.data.Diag
 import app.schoolday.notify.LunchNotifier
+import app.schoolday.update.Updater
 import app.schoolday.ui.theme.AppTheme
 import app.schoolday.ui.theme.Ic
 import app.schoolday.ui.theme.SchoolDayTheme
 import app.schoolday.ui.theme.T
 import app.schoolday.ui.theme.isDarkNow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -87,6 +94,12 @@ class MainActivity : ComponentActivity() {
         Diag.intro = blocked?.let { "skipped: $it" } ?: "started"
         intro = IntroState(willPlay = blocked == null)
         if (savedInstanceState == null) vm.checkForUpdate()
+        // Android's install confirmation is opened from here, while Schoolday is on screen.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                Updater.confirm.collect { if (it != null) Updater.takeConfirm()?.let(::openInstallConfirm) }
+            }
+        }
         // Keep the launch screen until Today is laid out (max ~0.7 s), then hand over to the
         // overlay, which starts on exactly the same picture.
         val start = SystemClock.uptimeMillis()
@@ -117,7 +130,7 @@ class MainActivity : ComponentActivity() {
                     if (!intro.finished) IntroOverlay(intro)
                     else {
                         val update by vm.update.collectAsStateWithLifecycle()
-                        UpdatePrompt(update, onUpdate = vm::startUpdate, onLater = vm::dismissUpdate, onAllow = ::openInstallSettings)
+                        UpdatePrompt(update, onUpdate = vm::startUpdate, onLater = vm::dismissUpdate, onAllow = ::openInstallSettings, onBrowser = ::openInBrowser)
                     }
                 }
             }
@@ -128,6 +141,21 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         openRequest.value = intent.getStringExtra(LunchNotifier.EXTRA_OPEN)
+    }
+
+    private fun openInstallConfirm(confirm: Intent) {
+        // Tell the installer who is asking; without this Android 14+ may hide it and cancel.
+        val options = if (Build.VERSION.SDK_INT >= 34) ActivityOptions.makeBasic().setShareIdentityEnabled(true).toBundle() else null
+        try {
+            startActivity(confirm, options)
+        } catch (e: Exception) {
+            Diag.update = "confirm screen failed: ${e.javaClass.simpleName}: ${e.message}"
+            Updater.reportInstallError(S.updateFailed)
+        }
+    }
+
+    private fun openInBrowser(url: String) {
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: ActivityNotFoundException) {}
     }
 
     private fun openInstallSettings() {

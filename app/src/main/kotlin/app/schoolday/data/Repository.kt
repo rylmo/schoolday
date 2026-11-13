@@ -205,6 +205,7 @@ class Repository(private val context: Context, val prefs: Prefs) {
             appendLine("cache ${it.name}: ${(System.currentTimeMillis() - it.lastModified()) / 60_000} min old")
         }
         appendLine("Launch animation: ${Diag.intro}")
+        appendLine("Last update attempt: ${Diag.update}")
         appendLine("Recent errors:")
         if (errors.isEmpty()) appendLine("  none") else errors.forEach { appendLine("  $it") }
     }
@@ -240,4 +241,5 @@ fun Throwable.friendly(): String = when (this) {
 /** Facts for Settings > Copy debug info. */
 object Diag {
     @Volatile var intro: String = "not run"
+    @Volatile var update: String = "none"
 }

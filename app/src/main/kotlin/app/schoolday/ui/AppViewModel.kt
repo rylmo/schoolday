@@ -11,6 +11,7 @@ import app.schoolday.data.Settings
 import app.schoolday.data.Timetable
 import app.schoolday.data.TimetableMode
 import app.schoolday.data.friendly
+import app.schoolday.data.Diag
 import app.schoolday.update.UpdateInfo
 import app.schoolday.update.Updater
 import app.schoolday.notify.LunchNotifier
@@ -227,6 +228,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _update.value = UpdateUi.Installing(info)
                 Updater.install(ctx, apk)
             } catch (e: Exception) {
+                Diag.update = "download/install failed: ${e.javaClass.simpleName}: ${e.message}"
                 _update.value = UpdateUi.Failed(info, e.friendly())
             }
         }

@@ -91,6 +91,7 @@ open class Strings(val locale: Locale) {
     open val updateAllow = "Allow Schoolday to install updates, then come back."; open val openSettings = "Open settings"
     open val updateFailed = "The update failed. Try again later."; open val updateCancelled = "The update was cancelled."
     open val updateBadFile = "The download was damaged. Try again."
+    open val updateInBrowser = "Download in browser instead"
     open val checkUpdates = "Check for updates"; open val checkingUpdates = "Checking…"; open val upToDate = "You're on the latest version"
     open fun versionLabel(v: String) = "Version $v"
 
@@ -181,6 +182,7 @@ object Czech : Strings(Locale.forLanguageTag("cs")) {
     override val updateAllow = "Povol Schoolday instalovat aktualizace a pak se vrať."; override val openSettings = "Otevřít nastavení"
     override val updateFailed = "Aktualizace se nezdařila. Zkus to později."; override val updateCancelled = "Aktualizace byla zrušena."
     override val updateBadFile = "Stažený soubor je poškozený. Zkus to znovu."
+    override val updateInBrowser = "Stáhnout v prohlížeči"
     override val checkUpdates = "Zkontrolovat aktualizace"; override val checkingUpdates = "Kontroluji…"; override val upToDate = "Máš nejnovější verzi"
     override fun versionLabel(v: String) = "Verze $v"
 
