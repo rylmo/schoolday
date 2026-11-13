@@ -11,6 +11,8 @@ struct WidgetLesson: Codable, Hashable {
     var room: String
     var changed: Bool
     var cancelled: Bool
+    /// Bakaláři's group names ("ASW1", "Nj"); empty for the whole class.
+    var group: String? = nil
 }
 
 struct WidgetDay: Codable, Hashable {
@@ -134,7 +136,8 @@ enum Bakalari {
                         detail: cancelled ? (changeNote(info, lessonDate: date, today: today) ?? detail) : detail,
                         room: room,
                         changed: (atom.HasChanged ?? false) || !info.isEmpty,
-                        cancelled: cancelled
+                        cancelled: cancelled,
+                        group: group
                     )
                 }
             }
@@ -216,13 +219,14 @@ enum WidgetCache {
     private static let defaults = UserDefaults.standard
 
     static func load(_ classId: String) -> [WidgetDay]? {
-        guard let data = defaults.data(forKey: "tt.\(classId)") else { return nil }
+        guard let data = defaults.data(forKey: "tt2.\(classId)") else { return nil }
         return try? JSONDecoder().decode([WidgetDay].self, from: data)
     }
 
     static func save(_ classId: String, _ days: [WidgetDay]) {
         if let data = try? JSONEncoder().encode(days) {
-            defaults.set(data, forKey: "tt.\(classId)")
+            // tt2: older copies have no group names, so they couldn't be narrowed to your groups.
+            defaults.set(data, forKey: "tt2.\(classId)")
             defaults.set(Date(), forKey: "fetchedAt.\(classId)")
         }
     }

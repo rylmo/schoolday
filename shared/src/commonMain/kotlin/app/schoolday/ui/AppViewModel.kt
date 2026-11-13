@@ -1,6 +1,7 @@
 package app.schoolday.ui
 
 import app.schoolday.Platform
+import app.schoolday.data.Groups
 import app.schoolday.data.LunchMenu
 import app.schoolday.data.Repository
 import app.schoolday.data.SchoolClass
@@ -11,9 +12,12 @@ import app.schoolday.data.friendly
 import app.schoolday.update.UpdateInfo
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -55,7 +59,8 @@ class AppViewModel(private val platform: Platform, private val repo: Repository)
     val classes = _classes.asStateFlow()
 
     private val _timetables = MutableStateFlow<Map<TtKey, UiState<Timetable>>>(emptyMap())
-    val timetables = _timetables.asStateFlow()
+    /** Every group's lessons, as Bakaláři has them (Settings › Your groups reads the splits from these). */
+    val rawTimetables = _timetables.asStateFlow()
 
     private val _lunch = MutableStateFlow(UiState(repo.cachedLunch()))
     val lunch = _lunch.asStateFlow()
@@ -76,6 +81,20 @@ class AppViewModel(private val platform: Platform, private val repo: Repository)
             repo.classes().data?.let { _classes.value = it }
             delay(CLASS_LIST_REFRESH_DELAY_MS) // parsing that page is heavy; keep it clear of startup
             repo.classes(force = true).data?.let { _classes.value = it }
+        }
+    }
+
+    /** What the screens show: your own class without the groups you're not in. */
+    val timetables: StateFlow<Map<TtKey, UiState<Timetable>>> =
+        combine(_timetables, settings) { all, s -> withYourGroups(all, s) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, withYourGroups(_timetables.value, settings.value))
+
+    private fun withYourGroups(all: Map<TtKey, UiState<Timetable>>, s: Settings): Map<TtKey, UiState<Timetable>> {
+        val hidden = Groups.hidden(s.groups)
+        if (hidden.isEmpty()) return all
+        return all.mapValues { (key, state) ->
+            val tt = state.data
+            if (key.classId != s.myClass || tt == null) state else state.copy(data = Groups.filter(tt, hidden))
         }
     }
 
@@ -172,7 +191,11 @@ class AppViewModel(private val platform: Platform, private val repo: Repository)
             L.apply(after.lang)
             platform.languageChanged()
         }
-        if (before.myClass != after.myClass) loadTimetable(after.myClass, TimetableMode.Actual, force = true)
+        if (before.myClass != after.myClass) {
+            // Groups belong to a class; another class has other splits.
+            if (after.groups.isNotEmpty() && after.groups == before.groups) repo.prefs.update { it.copy(groups = emptyMap()) }
+            loadTimetable(after.myClass, TimetableMode.Actual, force = true)
+        }
         (after.shownClasses - before.shownClasses.toSet()).forEach { loadTimetable(it, TimetableMode.Actual) }
         if (before.lunchNotification != after.lunchNotification) platform.rescheduleLunch()
     }

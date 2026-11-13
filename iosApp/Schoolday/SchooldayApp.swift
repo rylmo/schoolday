@@ -47,6 +47,24 @@ final class AppModel: NSObject, ObservableObject, ChromeListener {
     func updateChanged(available: Bool, version: String) {
         updateVersion = available ? version : nil
     }
+    /// What's new since the last version seen; shown once the app is past its launch animation.
+    @Published var pendingNotes: [ReleaseNotes] = []
+    @Published var notesShown = false
+
+    func showNotesIfPending() {
+        guard !pendingNotes.isEmpty, !notesShown, barVisible, !settingsOpen else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self, !self.pendingNotes.isEmpty, self.barVisible, !self.settingsOpen else { return }
+            self.notesShown = true
+        }
+    }
+
+    func finishNotes() {
+        notesShown = false
+        pendingNotes = []
+        WhatsNewGate.markSeen()
+    }
+
     /// Days until SideStore's signature runs out, once there are fewer than three.
     @Published var daysLeft: Int? = SigningExpiry.daysLeft()
 
@@ -61,6 +79,7 @@ final class AppModel: NSObject, ObservableObject, ChromeListener {
         let core = SchoolIos(secure: KeychainStore(), installer: installer, shared: GroupFiles())
         self.core = core
         settings = SettingsModel(bridge: core.settingsBridge)
+        pendingNotes = WhatsNewGate.pending(core.settingsBridge.releaseNotes())
         super.init()
         core.chrome.listener = self
     }

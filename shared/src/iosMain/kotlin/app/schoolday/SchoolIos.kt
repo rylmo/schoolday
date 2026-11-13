@@ -18,6 +18,9 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import app.schoolday.data.Groups
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.cinterop.BetaInteropApi
@@ -134,16 +137,24 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller, private val sha
     private fun shareWithWidgets(platform: IosPlatform) {
         platform.readCache(LUNCH_CACHE)?.let { shared.write(LUNCH_CACHE, it) }
         MainScope().launch {
-            combine(vm.settings, vm.classes) { s, _ -> Triple(s.myClass, vm.className(s.myClass), s.allMeals) }
+            combine(vm.settings, vm.classes) { s, _ -> WidgetClass(s.myClass, vm.className(s.myClass), s.allMeals, Groups.hidden(s.groups)) }
                 .distinctUntilChanged()
-                .collect { (id, name, allMeals) ->
-                    // allMeals: the widget's menu shows breakfast and dinner too.
-                    shared.write("myclass.json", buildJsonObject { put("id", id); put("name", name); put("allMeals", allMeals) }.toString())
+                .collect { c ->
+                    shared.write("myclass.json", buildJsonObject {
+                        put("id", c.id)
+                        put("name", c.name)
+                        // The widget's menu shows breakfast and dinner too.
+                        put("allMeals", c.allMeals)
+                        // Lessons of these groups are left out of your class's widgets.
+                        put("hiddenGroups", buildJsonArray { c.hiddenGroups.sorted().forEach { add(it) } })
+                    }.toString())
                 }
         }
     }
 
     private val openRequest = mutableStateOf<String?>(null)
+
+    private data class WidgetClass(val id: String, val name: String, val allMeals: Boolean, val hiddenGroups: Set<String>)
 }
 
 /** The lunch menu's cache file, also handed to the widgets. */

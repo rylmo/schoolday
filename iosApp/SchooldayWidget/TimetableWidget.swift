@@ -28,7 +28,8 @@ private enum Metrics {
     static func headerHeight(small: Bool) -> CGFloat { small ? 28 : 22 }
     static let headerGap: CGFloat = 6
     static let smallRowHeight: CGFloat = 34
-    static let rowHeight: CGFloat = 30
+    /// 34, not 30: one line per lesson once your groups are set, so rows can be roomier.
+    static let rowHeight: CGFloat = 34
     /// Each extra group in a merged row adds a detail line (medium only).
     static let extraLine: CGFloat = 13
     static let maxGroupLines = 3
@@ -43,6 +44,9 @@ private enum Metrics {
     /// Medium: how much of the next lesson may peek in below the last whole one.
     static let peekOpacity = 0.55
     static let peekBlur: CGFloat = 1.2
+    /// Medium: the least of the next lesson that must show. When less would, one row fewer is
+    /// shown whole, so the faded preview never disappears on a phone where rows fit exactly.
+    static let minPeek: CGFloat = 12
 
     static func height(_ row: LessonRow, small: Bool) -> CGFloat {
         small ? smallRowHeight : rowHeight + extraLine * CGFloat(min(row.parts.count, maxGroupLines) - 1)
@@ -130,7 +134,7 @@ struct ShiftPageIntent: AppIntent {
 // MARK: - rows and windows
 
 /// Everything in one time slot. Groups of the class (ASW1 and ASW2, Aj1 and Nj…) become one row,
-/// since the public timetable can't tell which group you're in.
+/// unless Settings › Your groups narrows your own class to your groups (see YourGroups).
 struct LessonRow: Hashable {
     var period: String
     var start: Int
@@ -242,6 +246,9 @@ enum Windows {
             if count > 0, used + h > budget { break }
             used += h
             count += 1
+        }
+        if !small, count > 1, start + count < rows.count, budget - used < Metrics.minPeek {
+            count -= 1
         }
         return max(count, 1)
     }

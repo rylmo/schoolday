@@ -13,7 +13,7 @@ struct RootView: View {
     /// Not over the Settings sheet (it has its own Update button) or the launch animation.
     private var updateShown: Binding<Bool> {
         Binding(
-            get: { model.updateVersion != nil && !model.settingsOpen && model.barVisible },
+            get: { model.updateVersion != nil && !model.settingsOpen && model.barVisible && !model.notesShown },
             set: { shown in if !shown { model.updateVersion = nil } }
         )
     }
@@ -49,6 +49,12 @@ struct RootView: View {
                 .keyboardShortcut(.defaultAction)
         } message: { version in
             Text("Schoolday \(version)\n\n\(model.core.chrome.text.updateViaSideStore)")
+        }
+        .onChange(of: model.barVisible) { _ in model.showNotesIfPending() }
+        .onAppear { model.showNotesIfPending() }
+        .sheet(isPresented: $model.notesShown, onDismiss: { model.finishNotes() }) {
+            WhatsNewSheet(releases: model.pendingNotes, text: model.core.chrome.text) { model.notesShown = false }
+                .preferredColorScheme(model.dark ? .dark : .light)
         }
         .sheet(isPresented: settingsShown) {
             SettingsView(model: model.settings) { model.core.chrome.back() }

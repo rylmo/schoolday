@@ -25,6 +25,8 @@ data class Settings(
     val testBuilds: Boolean = false,
     /** Show the dormitory's breakfast and dinner; the Lunch tab becomes Menu. */
     val allMeals: Boolean = false,
+    /** Your group in each split subject of your class: the split's key (see Groups) → your group. */
+    val groups: Map<String, String> = emptyMap(),
 ) {
     val hasICanteen get() = icUser.isNotBlank() && icPass.isNotBlank()
 
@@ -53,6 +55,11 @@ class Prefs(private val kv: KeyValues, private val secure: SecureStore) {
         lang = kv.getString("lang") ?: "system",
         testBuilds = kv.getBoolean("testBuilds", false),
         allMeals = kv.getBoolean("allMeals", false),
+        groups = kv.getString("groups").orEmpty().split(';').mapNotNull { pair ->
+            val key = pair.substringBefore('=', "")
+            val pick = pair.substringAfter('=', "")
+            if (key.isEmpty() || pick.isEmpty()) null else key to pick
+        }.toMap(),
     )
 
     fun update(block: (Settings) -> Settings) {
@@ -67,6 +74,7 @@ class Prefs(private val kv: KeyValues, private val secure: SecureStore) {
         kv.putString("lang", s.lang)
         kv.putBoolean("testBuilds", s.testBuilds)
         kv.putBoolean("allMeals", s.allMeals)
+        kv.putString("groups", s.groups.entries.joinToString(";") { "${it.key}=${it.value}" })
         _state.value = s
     }
 

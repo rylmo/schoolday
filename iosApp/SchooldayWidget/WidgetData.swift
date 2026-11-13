@@ -18,6 +18,11 @@ enum WidgetData {
     /// The saved copy when it is fresh or the user just tapped an arrow (so taps redraw at once),
     /// otherwise both weeks from Bakaláři.
     static func days(for classId: String, now: Date) async -> (days: [WidgetDay], offline: Bool) {
+        let loaded = await allGroupsDays(for: classId, now: now)
+        return (YourGroups.apply(loaded.days, classId: classId), loaded.offline)
+    }
+
+    private static func allGroupsDays(for classId: String, now: Date) async -> (days: [WidgetDay], offline: Bool) {
         let cached = WidgetCache.load(classId)
         if let cached, !cached.isEmpty, WidgetCache.age(classId, now: now) < 20 * 60 || WidgetCache.recentTap(now: now) != nil {
             return (cached, false)
@@ -221,4 +226,49 @@ struct DayReading {
 extension LessonRow {
     /// Short subject name for small spaces ("ANJ").
     var shortName: String { abbrev }
+}
+
+/// Settings › Your groups, shared by the app: your class's widgets leave out the other groups' lessons.
+enum YourGroups {
+    private struct Mine: Codable {
+        var id: String
+        var hiddenGroups: [String]?
+    }
+
+    /// The groups to leave out of [classId]'s lessons: only your own class has groups set.
+    static func hidden(for classId: String) -> Set<String> {
+        guard let data = AppGroup.read(SharedFile.myClass),
+              let mine = try? JSONDecoder().decode(Mine.self, from: data), mine.id == classId
+        else { return [] }
+        return Set(mine.hiddenGroups ?? [])
+    }
+
+    private static func codes(_ group: String?) -> [String] {
+        (group ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    /// Drops lessons that belong only to hidden groups. A lesson left on its own in its slot loses
+    /// its group name ("ASW1 · P334 · Knápek" → "P334 · Knápek"), since there's nothing to tell apart.
+    static func apply(_ days: [WidgetDay], classId: String) -> [WidgetDay] {
+        let hidden = hidden(for: classId)
+        guard !hidden.isEmpty else { return days }
+        return days.map { day in
+            var day = day
+            let all = day.lessons
+            let kept = all.filter { lesson in
+                let c = codes(lesson.group)
+                return c.isEmpty || c.contains { !hidden.contains($0) }
+            }
+            day.lessons = kept.map { lesson in
+                var lesson = lesson
+                let before = all.filter { $0.start == lesson.start }.count
+                let after = kept.filter { $0.start == lesson.start }.count
+                if let group = lesson.group, !group.isEmpty, after < before, lesson.detail.hasPrefix(group + " · ") {
+                    lesson.detail = String(lesson.detail.dropFirst(group.count + 3))
+                }
+                return lesson
+            }
+            return day
+        }
+    }
 }

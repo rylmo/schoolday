@@ -61,6 +61,7 @@ struct SettingsView: View {
 
     private func form(_ snap: SettingsSnapshot) -> some View {
         Form {
+            groupsSection(snap)
             iCanteenSection(snap)
             classesSection(snap)
             appSection(snap)
@@ -88,6 +89,11 @@ struct SettingsView: View {
                             .modifier(GlassButton(prominent: true))
                     }
                 }
+                NavigationLink {
+                    ReleaseHistory(notes: bridge.releaseNotes(), title: text.changesTitle)
+                } label: {
+                    Text(text.changesTitle)
+                }
                 Button {
                     UIPasteboard.general.string = bridge.debugInfo()
                     copied = true
@@ -104,6 +110,30 @@ struct SettingsView: View {
             } footer: {
                 Text(text.footer(v: snap.version))
             }
+        }
+    }
+
+    /// First in Settings: one row with how many groups are set, opening the page where you pick them.
+    private func groupsSection(_ snap: SettingsSnapshot) -> some View {
+        Section {
+            NavigationLink {
+                GroupsView(model: model)
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.black.opacity(0.85))
+                        .frame(width: 36, height: 36)
+                        .background(lunchOrange, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(text.yourGroups).font(.headline)
+                        Text(snap.groupsSummary).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        } footer: {
+            Text(text.yourGroupsSub)
         }
     }
 
@@ -269,7 +299,7 @@ private struct Swatch: View {
     }
 }
 
-private struct GlassButton: ViewModifier {
+struct GlassButton: ViewModifier {
     let prominent: Bool
 
     func body(content: Content) -> some View {

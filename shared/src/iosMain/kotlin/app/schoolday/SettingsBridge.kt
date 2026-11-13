@@ -1,7 +1,11 @@
 package app.schoolday
 
 import androidx.compose.ui.graphics.toArgb
+import app.schoolday.data.Groups
 import app.schoolday.data.SchoolClass
+import app.schoolday.data.Timetable
+import app.schoolday.data.TimetableMode
+import app.schoolday.ui.TtKey
 import app.schoolday.ui.AppViewModel
 import app.schoolday.ui.S
 import app.schoolday.ui.Strings
@@ -13,6 +17,12 @@ import kotlinx.coroutines.launch
 
 /** One choice in a native Settings list. [group] sorts themes into "dark"/"light" sections. */
 class SettingsOption(val key: String, val name: String, val group: String = "", val swatch: List<String> = emptyList())
+
+/**
+ * One split subject on the Your groups page. [options] start with "All" (key ""), each with the
+ * teacher or subjects in [SettingsOption.group]; [picked] is the chosen key ("" for all).
+ */
+class GroupChoiceRow(val key: String, val title: String, val kind: String, val options: List<SettingsOption>, val picked: String)
 
 /** Everything the native Settings screen shows, rebuilt whenever something changes. */
 class SettingsSnapshot(
@@ -32,6 +42,11 @@ class SettingsSnapshot(
     val updateAvailable: Boolean,
     val testBuilds: Boolean,
     val allMeals: Boolean,
+    /** Your class's split subjects; empty while its timetable loads or when it has none. */
+    val groups: List<GroupChoiceRow>,
+    /** "5 of 6 set · IT3B" under Your groups. */
+    val groupsSummary: String,
+    val groupsLoading: Boolean,
 )
 
 /** Implemented by the SwiftUI Settings screen. */
@@ -51,13 +66,41 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
 
     fun watch(listener: SettingsListener) {
         scope.launch {
-            combine(vm.settings, vm.classes, vm.update) { _, classes, _ -> snapshot(classes) }.collect { listener.changed(it) }
+            combine(vm.settings, vm.classes, vm.update, vm.rawTimetables) { _, classes, _, _ -> snapshot(classes) }
+                .collect { listener.changed(it) }
         }
+        loadGroups()
     }
+
+    /** The permanent timetable has every split, without this week's changes. */
+    fun loadGroups() = vm.loadTimetable(vm.settings.value.myClass, TimetableMode.Permanent)
+
+    private fun splits(myClass: String): Timetable? =
+        vm.rawTimetables.value[TtKey(myClass, TimetableMode.Permanent)]?.data
+            ?: vm.rawTimetables.value[TtKey(myClass, TimetableMode.Actual)]?.data
+
+    /** Picks [code] in the split [key]; "" shows every group again. */
+    fun pickGroup(key: String, code: String) = vm.updateSettings {
+        it.copy(groups = if (code.isEmpty()) it.groups - key else it.groups + (key to code))
+    }
+
+    /** Every version's changes, newest first, in the app's language. */
+    fun releaseNotes(): List<ReleaseNotes> = IosChangelog.all()
 
     private fun snapshot(classes: List<SchoolClass>): SettingsSnapshot {
         val s = vm.settings.value
         fun option(id: String) = SettingsOption(id, vm.className(id))
+        val tt = splits(s.myClass)
+        val choices = tt?.let { Groups.choices(it) }.orEmpty()
+        val groups = choices.map { c ->
+            GroupChoiceRow(
+                key = c.key,
+                title = c.title,
+                kind = if (c.sameSubject) S.yourGroup else S.yourSubject,
+                options = listOf(SettingsOption("", S.allGroups, S.everyGroup)) + c.options.map { SettingsOption(it.code, it.code, it.detail) },
+                picked = s.groups[c.key]?.takeIf { pick -> c.options.any { it.code == pick } }.orEmpty(),
+            )
+        }
         return SettingsSnapshot(
             loggedIn = s.hasICanteen,
             icUser = s.icUser,
@@ -77,6 +120,13 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
             language = s.lang,
             testBuilds = s.testBuilds,
             allMeals = s.allMeals,
+            groups = groups,
+            groupsSummary = when {
+                tt == null -> S.loading
+                groups.isEmpty() -> S.noSplits
+                else -> S.groupsSet(groups.count { it.picked.isNotEmpty() }, groups.size, vm.className(s.myClass))
+            },
+            groupsLoading = tt == null,
             languages = listOf(
                 SettingsOption("system", S.langSystem),
                 SettingsOption("cs", "Čeština"),
@@ -104,7 +154,10 @@ class SettingsBridge internal constructor(private val vm: AppViewModel) {
         vm.updateSettings { it.copy(testBuilds = on) }
         vm.checkForUpdate(manual = true)
     }
-    fun updateMyClass(key: String) = vm.updateSettings { it.copy(myClass = key, shownClasses = it.shownClasses - key) }
+    fun updateMyClass(key: String) {
+        vm.updateSettings { it.copy(myClass = key, shownClasses = it.shownClasses - key) }
+        loadGroups()
+    }
     fun addClass(key: String) = vm.updateSettings { it.copy(shownClasses = it.shownClasses + key) }
     fun removeClass(key: String) = vm.updateSettings { it.copy(shownClasses = it.shownClasses - key) }
 
