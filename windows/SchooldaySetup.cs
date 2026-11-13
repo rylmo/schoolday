@@ -333,7 +333,8 @@ class SetupForm : Form
 
         // A free Apple Account signs apps for 7 days. SideStore renews them on the phone, with Wi-Fi
         // and LocalDevVPN on, through its "Refresh All Apps" Shortcuts action; a daily personal
-        // automation runs it without anyone having to remember.
+        // automation runs it without anyone having to remember. The VPN goes off in a second
+        // automation: Refresh All Apps tends to end its shortcut early, so later actions never ran.
         steps.Add(new Step
         {
             Eyebrow = n(7),
@@ -343,17 +344,15 @@ class SetupForm : Form
                 "1.  Open the Shortcuts app, go to Automation and tap +.\n" +
                 "2.  Choose Time of Day, pick a time you're usually home on Wi-Fi (e.g. 19:00), set it to Daily and choose Run Immediately. Tap Next.\n" +
                 "3.  Tap New Blank Automation, then Add Action. Search for LocalDevVPN and add the action that turns the VPN on.\n" +
-                "4.  Search for SideStore and add Refresh All Apps.\n" +
-                "5.  Add LocalDevVPN's action that turns the VPN off again, so it isn't left on all day.\n" +
-                "6.  Tap Done.\n\n" +
+                "4.  Search for SideStore, add Refresh All Apps and tap Done.\n" +
+                "5.  Turning the VPN off needs a second automation: Refresh All Apps often ends the shortcut early, even when renewing worked, so nothing after it runs. Tap + again, choose Time of Day 15 minutes later (e.g. 19:15), Daily, Run Immediately, and add only LocalDevVPN's action that turns the VPN off.\n\n" +
                 "Renewing needs Wi-Fi, mobile data isn't enough. If it ever misses, Schoolday warns you 3 days before it would stop: open SideStore with LocalDevVPN on and tap the 7 DAYS button.",
                 "Aplikace ze SideStoru se po 7 dnech přestanou otevírat, pokud je SideStore neobnoví. Účet Apple se nemění, jen podpis aplikace. Nech iPhone, ať ho obnovuje každý den:\n\n" +
                 "1.  Otevři aplikaci Zkratky, přejdi na Automatizace a klepni na +.\n" +
                 "2.  Vyber Denní doba, zvol čas, kdy býváš doma na Wi-Fi (třeba 19:00), nastav Denně a Spustit okamžitě. Klepni na Další.\n" +
                 "3.  Klepni na Nová prázdná automatizace a pak na Přidat akci. Vyhledej LocalDevVPN a přidej akci, která VPN zapne.\n" +
-                "4.  Vyhledej SideStore a přidej Refresh All Apps.\n" +
-                "5.  Přidej akci LocalDevVPN, která VPN zase vypne, ať nezůstane zapnutá celý den.\n" +
-                "6.  Klepni na Hotovo.\n\n" +
+                "4.  Vyhledej SideStore, přidej Refresh All Apps a klepni na Hotovo.\n" +
+                "5.  Na vypnutí VPN je potřeba druhá automatizace: Refresh All Apps často zkratku ukončí předčasně, i když se obnova povedla, takže nic za ní neproběhne. Klepni znovu na +, vyber Denní doba o 15 minut později (třeba 19:15), Denně, Spustit okamžitě a přidej jen akci LocalDevVPN, která VPN vypne.\n\n" +
                 "Obnova potřebuje Wi-Fi, mobilní data nestačí. Kdyby se někdy nepovedla, Schoolday tě 3 dny předem upozorní: otevři SideStore se zapnutou LocalDevVPN a klepni na 7 DAYS."),
         });
 
