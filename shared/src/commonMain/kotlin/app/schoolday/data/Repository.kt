@@ -94,10 +94,11 @@ class Repository(private val platform: Platform, val prefs: Prefs) {
 
     /** The school website's menu, cached for a few hours (used for nicer names and as fallback). */
     private suspend fun webMenu(force: Boolean): LunchMenu? {
-        val cached = readCache("web.json", LunchMenu.serializer())
+        // web2: copies saved before breakfast and dinner were read would hide them for hours.
+        val cached = readCache("web2.json", LunchMenu.serializer())
         if (!force && cached != null && nowMillis() - cached.fetchedAt < 6 * HOUR) return cached
         return try {
-            MenuClient.fetch().also { writeCache("web.json", LunchMenu.serializer(), it) }
+            MenuClient.fetch().also { writeCache("web2.json", LunchMenu.serializer(), it) }
         } catch (e: Exception) {
             noteError("menu", e); cached
         }

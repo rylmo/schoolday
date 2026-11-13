@@ -49,6 +49,9 @@ import kotlinx.coroutines.delay
 /** Notification tap: open the Lunch tab with today's details. */
 const val OPEN_LUNCH_TODAY = "lunch_today"
 
+/** Widget tap on iOS while it shows the menu: open the Lunch tab, on "<yyyy-MM-dd>" after this prefix. */
+const val OPEN_LUNCH = "lunch:"
+
 /** Widget tap on iOS: open the Timetable tab on "<class id>" or "<class id>@<yyyy-MM-dd>" after this prefix. */
 const val OPEN_TIMETABLE = "timetable:"
 
@@ -96,6 +99,9 @@ class NativeChrome {
     fun startUpdate() = startUpdateAction()
     fun dismissUpdate() = dismissUpdateAction()
 
+    /** "!" on a lesson whose group isn't set: the host shows just that split's groups. */
+    internal fun askGroup(key: String) { listener?.showGroups(key) }
+
     internal fun publish(tab: Int, settingsOpen: Boolean, visible: Boolean, dark: Boolean, titles: List<String>) {
         val send: (ChromeListener) -> Unit = { it.changed(tab, settingsOpen, visible, dark, titles) }
         replay = send
@@ -124,6 +130,8 @@ interface ChromeListener {
     fun changed(tab: Int, settingsOpen: Boolean, visible: Boolean, dark: Boolean, titles: List<String>)
     fun timetableChanged(weekView: Boolean, permanent: Boolean)
     fun updateChanged(available: Boolean, version: String)
+    /** Show Your groups for the split [key] only. */
+    fun showGroups(key: String)
 }
 
 /** Set on iOS, where toolbar buttons and Settings are native; screens then leave them out. */
@@ -188,6 +196,13 @@ private fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>, intro:
             showSettings = false
             tab = Tab.Lunch
             lunchSheetDate = todayDate().toString()
+            openRequest.value = null
+        } else if (request != null && request.startsWith(OPEN_LUNCH)) {
+            val date = request.removePrefix(OPEN_LUNCH)
+            showSettings = false
+            tab = Tab.Lunch
+            // Another day than today: open that day's menu too.
+            lunchSheetDate = date.takeIf { it.isNotEmpty() && it != todayDate().toString() }
             openRequest.value = null
         } else if (request != null && request.startsWith(OPEN_TIMETABLE)) {
             val target = request.removePrefix(OPEN_TIMETABLE)

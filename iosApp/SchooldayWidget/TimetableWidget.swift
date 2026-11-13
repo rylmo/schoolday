@@ -153,6 +153,8 @@ struct LessonRow: Hashable {
     var abbrev: String { distinct(parts.map { $0.abbrev.isEmpty ? $0.subject : $0.abbrev }).joined(separator: "/") }
     var rooms: String { distinct(parts.map(\.room)).joined(separator: " · ") }
     var mixedSubjects: Bool { distinct(parts.map(\.subject)).count > 1 }
+    /// Set when this is your class and you haven't picked your group here yet.
+    var unsetSplit: String? { parts.lazy.compactMap(\.split).first }
 
     static func of(_ day: WidgetDay) -> [LessonRow] {
         var rows: [LessonRow] = []
@@ -314,8 +316,10 @@ struct TimetableProvider: AppIntentTimelineProvider {
 
     /// The menu for one day; ▲ ▼ move through the days.
     private func menuEntry(_ cls: ClassEntity, _ configuration: TimetableWidgetIntent, _ context: Context, now: Date) async -> TimetableEntry {
-        let (days, iCanteen) = await WidgetData.menuDays()
-        let built = MenuPage.build(days: days, iCanteen: iCanteen, allMeals: WidgetData.allMeals(),
+        let (shared, iCanteen) = await WidgetData.menuDays()
+        let allMeals = WidgetData.allMeals()
+        let days = allMeals ? await WidgetData.withAllMeals(shared) : shared
+        let built = MenuPage.build(days: days, iCanteen: iCanteen, allMeals: allMeals,
                                    offset: WidgetCache.menuOffset(cls.id), now: now)
         if let built, built.index != WidgetCache.menuOffset(cls.id) { WidgetCache.setMenuOffset(cls.id, built.index) }
         let small = context.family == .systemSmall
@@ -411,7 +415,7 @@ private struct Palette {
         switch theme {
         case .bakalari: dark ? rgb(0.13, 0.137, 0.153) : rgb(0.925, 0.925, 0.937)
         case .schoolday: dark ? rgb(0.059, 0.063, 0.071) : rgb(0.965, 0.957, 0.937)
-        case .graphite: dark ? rgb(0.11, 0.11, 0.118) : rgb(0.93, 0.93, 0.94)
+        case .graphite: dark ? rgb(0.05, 0.12, 0.09) : rgb(0.9, 0.95, 0.92)
         case .ocean: dark ? rgb(0.055, 0.1, 0.17) : rgb(0.91, 0.94, 0.98)
         }
     }
@@ -419,7 +423,7 @@ private struct Palette {
     var row: Color {
         guard fullColor else { return Color.primary.opacity(0.1) }
         guard dark else { return Color.black.opacity(0.05) }
-        return theme == .schoolday || theme == .ocean ? Color.white.opacity(0.07) : Color.black.opacity(0.24)
+        return theme == .bakalari ? Color.black.opacity(0.24) : Color.white.opacity(0.07)
     }
 
     /// The colour for changes and your order: Bakaláři's pink, Schoolday's orange, and so on.
@@ -427,7 +431,7 @@ private struct Palette {
         switch theme {
         case .bakalari: dark ? rgb(0.94, 0.33, 0.53) : rgb(0.85, 0.11, 0.38)
         case .schoolday: dark ? rgb(0.949, 0.651, 0.353) : rgb(0.78, 0.42, 0.12)
-        case .graphite: dark ? rgb(0.62, 0.68, 0.78) : rgb(0.33, 0.4, 0.5)
+        case .graphite: dark ? rgb(0.42, 0.86, 0.62) : rgb(0.08, 0.5, 0.3)
         case .ocean: dark ? rgb(0.45, 0.72, 1.0) : rgb(0.12, 0.42, 0.8)
         }
     }
@@ -616,6 +620,8 @@ struct TimetableWidgetView: View {
     /// Opens the app on this class and the day shown.
     private var link: URL? {
         guard let id = entry.classId, !id.isEmpty else { return nil }
+        // Showing the menu: open the app's Lunch tab on that day.
+        if let menu = entry.menu { return URL(string: "schoolday://lunch?date=\(menu.date)") }
         let day = entry.window.map { "?date=\($0.day.date)" } ?? ""
         return URL(string: "schoolday://timetable/\(id)\(day)")
     }
@@ -698,6 +704,16 @@ private struct MediumRow: View {
                 }
             }
             Spacer(minLength: 0)
+            // Opens just this split's groups in the app.
+            if let key = row.unsetSplit,
+               let url = URL(string: "schoolday://groups?key=" + (key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")) {
+                Link(destination: url) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(palette.accent)
+                        .widgetAccentable()
+                }
+            }
         }
         .padding(.trailing, 8)
         .frame(height: Metrics.height(row, small: false))

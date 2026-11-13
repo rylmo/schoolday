@@ -22,8 +22,8 @@ object IosChangelog {
     private val entries = listOf(
         Entry("1.4", listOf(
             note("person.2.fill", "Your groups", "Tvoje skupiny",
-                "Pick your group for each split subject at the top of Settings. Timetable, Today and the widgets then show only your lessons.",
-                "Nahoře v Nastavení si u každého děleného předmětu vyber svou skupinu. Rozvrh, Dnes i widgety pak ukážou jen tvoje hodiny."),
+                "Pick your group for each split subject at the top of Settings, or tap the ! on a lesson. Timetable, Today and the widgets then show only your lessons.",
+                "Nahoře v Nastavení si u každého děleného předmětu vyber svou skupinu, nebo klepni na ! u hodiny. Rozvrh, Dnes i widgety pak ukážou jen tvoje hodiny."),
             note("fork.knife", "Breakfast and dinner", "Snídaně a večeře",
                 "Turn them on in Settings and the Lunch tab becomes Menu.",
                 "Zapni je v Nastavení a z karty Oběd se stane Jídelníček."),

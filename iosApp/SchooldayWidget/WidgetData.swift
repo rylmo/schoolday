@@ -66,6 +66,21 @@ enum WidgetData {
         return (await SchoolMenu.days() ?? [], false)
     }
 
+    /// Breakfast and dinner the app's copy lacks (iCanteen has none, older copies weren't merged
+    /// yet) come from the school website.
+    static func withAllMeals(_ days: [LunchDay]) async -> [LunchDay] {
+        guard days.contains(where: { $0.breakfast == nil || $0.dinner == nil }), let web = await SchoolMenu.days() else { return days }
+        let byDate = Dictionary(web.map { ($0.date, $0) }, uniquingKeysWith: { first, _ in first })
+        return days.map { day in
+            var day = day
+            if let w = byDate[day.date] {
+                day.breakfast = day.breakfast ?? w.breakfast
+                day.dinner = day.dinner ?? w.dinner
+            }
+            return day
+        }
+    }
+
     /// Settings › Breakfast and dinner, shared by the app with your class.
     static func allMeals() -> Bool {
         struct Flags: Codable { var allMeals: Bool? }
@@ -110,7 +125,8 @@ enum WidgetData {
 /// The school website's public menu (no orders), read without an HTML library.
 enum SchoolMenu {
     private static let url = URL(string: "https://www.roznovskastredni.cz/jidelnicek")!
-    private static let cacheKey = "schoolMenu"
+    // 2: copies saved before breakfast and dinner were read would hide them for hours.
+    private static let cacheKey = "schoolMenu2"
 
     static func days() async -> [WidgetData.LunchDay]? {
         let defaults = UserDefaults.standard
@@ -233,14 +249,26 @@ enum YourGroups {
     private struct Mine: Codable {
         var id: String
         var hiddenGroups: [String]?
+        var pickedSplits: [String]?
     }
 
-    /// The groups to leave out of [classId]'s lessons: only your own class has groups set.
-    static func hidden(for classId: String) -> Set<String> {
+    /// Your class and its groups, when [classId] is it: only your own class has groups set.
+    private static func mine(_ classId: String) -> Mine? {
         guard let data = AppGroup.read(SharedFile.myClass),
               let mine = try? JSONDecoder().decode(Mine.self, from: data), mine.id == classId
-        else { return [] }
-        return Set(mine.hiddenGroups ?? [])
+        else { return nil }
+        return mine
+    }
+
+    /// The split of one slot's lessons while no group is picked in it; Praxe never asks.
+    private static func unsetSplit(_ slot: [WidgetLesson], picked: Set<String>) -> String? {
+        let live = slot.filter { !$0.cancelled && !codes($0.group).isEmpty }
+        let groups = Set(live.flatMap { codes($0.group) })
+        guard groups.count >= 2,
+              !live.contains(where: { $0.abbrev.uppercased() == "PRX" || $0.subject.hasPrefix("Praxe") })
+        else { return nil }
+        let key = groups.sorted().joined(separator: "|")
+        return picked.contains(key) ? nil : key
     }
 
     private static func codes(_ group: String?) -> [String] {
@@ -250,8 +278,9 @@ enum YourGroups {
     /// Drops lessons that belong only to hidden groups. A lesson left on its own in its slot loses
     /// its group name ("ASW1 · P334 · Knápek" → "P334 · Knápek"), since there's nothing to tell apart.
     static func apply(_ days: [WidgetDay], classId: String) -> [WidgetDay] {
-        let hidden = hidden(for: classId)
-        guard !hidden.isEmpty else { return days }
+        guard let shared = mine(classId) else { return days }
+        let hidden = Set(shared.hiddenGroups ?? [])
+        let picked = Set(shared.pickedSplits ?? [])
         return days.map { day in
             var day = day
             let all = day.lessons
@@ -266,6 +295,7 @@ enum YourGroups {
                 if let group = lesson.group, !group.isEmpty, after < before, lesson.detail.hasPrefix(group + " · ") {
                     lesson.detail = String(lesson.detail.dropFirst(group.count + 3))
                 }
+                lesson.split = unsetSplit(kept.filter { $0.start == lesson.start }, picked: picked)
                 return lesson
             }
             return day

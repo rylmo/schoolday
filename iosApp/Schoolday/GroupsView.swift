@@ -6,13 +6,19 @@ private let accent = Color(red: 0.949, green: 0.651, blue: 0.353)
 /// Settings › Your groups: each split subject of your class with a row of glass chips, "All" first.
 struct GroupsView: View {
     @ObservedObject var model: SettingsModel
+    /// From a "!": just this split, in a sheet that closes once a group is picked.
+    var only: String? = nil
+    @Environment(\.dismiss) private var dismiss
 
     private var text: Strings { model.bridge.text }
 
     var body: some View {
         List {
             if let snap = model.snapshot {
-                let rows = snap.groups
+                let all = snap.groups
+                let match = all.filter { $0.key == only }
+                // A split this week only (not in the permanent timetable) falls back to all of them.
+                let rows = match.isEmpty ? all : match
                 if rows.isEmpty {
                     Section {
                         HStack(spacing: 10) {
@@ -39,7 +45,7 @@ struct GroupsView: View {
                         }
                         .textCase(nil)
                     } footer: {
-                        if i == rows.count - 1 { Text(text.praxeNote) }
+                        if i == rows.count - 1, only == nil { Text(text.praxeNote) }
                     }
                 }
             }
@@ -47,6 +53,17 @@ struct GroupsView: View {
         .navigationTitle(text.yourGroups)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { model.bridge.loadGroups() }
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                if only != nil {
+                    if #available(iOS 26.0, *) {
+                        Button(role: .close) { dismiss() }
+                    } else {
+                        Button(text.done) { dismiss() }
+                    }
+                }
+            }
+        }
         .tint(accent)
     }
 
@@ -57,6 +74,10 @@ struct GroupsView: View {
                 let option = options[i]
                 Button {
                     model.bridge.pickGroup(key: row.key, code: option.key)
+                    // From a "!": the choice is made, so the sheet goes once the chip has lit up.
+                    if only != nil, !option.key.isEmpty {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { dismiss() }
+                    }
                 } label: {
                     VStack(spacing: 1) {
                         Text(option.name).font(.system(size: 14, weight: .bold))

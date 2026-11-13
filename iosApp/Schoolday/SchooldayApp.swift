@@ -47,6 +47,11 @@ final class AppModel: NSObject, ObservableObject, ChromeListener {
     func updateChanged(available: Bool, version: String) {
         updateVersion = available ? version : nil
     }
+    /// A "!" in the Timetable or on the widget: the split whose groups to show on their own.
+    @Published var groupsKey: String?
+
+    func showGroups(key: String) { groupsKey = key }
+
     /// What's new since the last version seen; shown once the app is past its launch animation.
     @Published var pendingNotes: [ReleaseNotes] = []
     @Published var notesShown = false
@@ -112,6 +117,12 @@ struct SchooldayApp: App {
                 .onOpenURL { url in
                     // A bare schoolday:// is LocalDevVPN handing back during an update.
                     if (url.host ?? "").isEmpty, model.installer.resume() { return }
+                    // schoolday://groups?key=… from the widget's "!".
+                    if url.host == "groups" {
+                        model.groupsKey = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                            .queryItems?.first { $0.name == "key" }?.value
+                        return
+                    }
                     model.core.openLink(url: url.absoluteString)
                 }
         }

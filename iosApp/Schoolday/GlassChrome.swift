@@ -18,6 +18,14 @@ struct RootView: View {
         )
     }
 
+    /// One split's groups, from a "!"; waits until the launch animation and other sheets are gone.
+    private var groupsShown: Binding<Bool> {
+        Binding(
+            get: { model.groupsKey != nil && model.barVisible && !model.settingsOpen && !model.notesShown },
+            set: { shown in if !shown { model.groupsKey = nil } }
+        )
+    }
+
     private var settingsShown: Binding<Bool> {
         Binding(
             get: { model.settingsOpen },
@@ -55,6 +63,13 @@ struct RootView: View {
         .sheet(isPresented: $model.notesShown, onDismiss: { model.finishNotes() }) {
             WhatsNewSheet(releases: model.pendingNotes, text: model.core.chrome.text) { model.notesShown = false }
                 .preferredColorScheme(model.dark ? .dark : .light)
+        }
+        .sheet(isPresented: groupsShown) {
+            NavigationStack {
+                GroupsView(model: model.settings, only: model.groupsKey)
+            }
+            .presentationDetents([.medium, .large])
+            .preferredColorScheme(model.dark ? .dark : .light)
         }
         .sheet(isPresented: settingsShown) {
             SettingsView(model: model.settings) { model.core.chrome.back() }

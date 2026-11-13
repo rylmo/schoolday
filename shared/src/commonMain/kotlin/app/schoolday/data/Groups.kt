@@ -63,6 +63,18 @@ object Groups {
         return name.split(' ').last { it.isNotBlank() }
     }
 
+    /**
+     * The split one slot's [lessons] belong to while you haven't picked your group in it (the
+     * Timetable marks those with "!"), or null.
+     */
+    fun unsetSplit(lessons: List<Lesson>, picks: Map<String, String>): String? {
+        val live = lessons.filter { !it.removed && it.group.isNotBlank() }
+        val codes = live.flatMap { codes(it.group) }.distinct()
+        if (codes.size < 2 || live.any(::rotates)) return null
+        val key = codes.sorted().joinToString("|")
+        return if (key in picks) null else key
+    }
+
     /** Group codes to hide: the other groups of every split where you picked one. */
     fun hidden(picks: Map<String, String>): Set<String> =
         picks.flatMap { (key, pick) -> key.split('|').filter { it != pick } }.toSet()

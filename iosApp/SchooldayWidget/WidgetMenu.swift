@@ -12,7 +12,8 @@ enum WidgetTheme: String, AppEnum, CaseIterable {
     static var caseDisplayRepresentations: [WidgetTheme: DisplayRepresentation] = [
         .bakalari: "Bakaláři",
         .schoolday: "Schoolday",
-        .graphite: "Graphite",
+        // Was Graphite, too close to Bakaláři; the case keeps its name so set widgets carry over.
+        .graphite: "Forest",
         .ocean: "Ocean",
     ]
 }
@@ -87,7 +88,9 @@ struct MenuPage: Hashable {
         let index = min(max(offset, 0), upcoming.count - 1)
         let day = upcoming[index]
         var rows: [Row] = []
-        if allMeals, let breakfast = day.breakfast {
+        // Breakfast ends at 8:00; after that today's menu starts at lunch.
+        let breakfastOver = day.date == today && WidgetDates.minutes(now) >= 8 * 60
+        if allMeals, !breakfastOver, let breakfast = day.breakfast {
             rows.append(Row(label: W.breakfast, shortLabel: W.breakfastShort, dish: WidgetData.shortDish(breakfast), mine: false))
         }
         for meal in day.options {

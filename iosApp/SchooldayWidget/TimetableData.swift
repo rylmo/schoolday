@@ -13,6 +13,8 @@ struct WidgetLesson: Codable, Hashable {
     var cancelled: Bool
     /// Bakaláři's group names ("ASW1", "Nj"); empty for the whole class.
     var group: String? = nil
+    /// Your class, a split whose group you haven't picked (see YourGroups): the row shows "!".
+    var split: String? = nil
 }
 
 struct WidgetDay: Codable, Hashable {

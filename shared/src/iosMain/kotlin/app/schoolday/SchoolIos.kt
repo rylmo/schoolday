@@ -9,6 +9,7 @@ import app.schoolday.ui.AppViewModel
 import app.schoolday.ui.IntroState
 import app.schoolday.ui.L
 import app.schoolday.ui.NativeChrome
+import app.schoolday.ui.OPEN_LUNCH
 import app.schoolday.ui.OPEN_TIMETABLE
 import app.schoolday.ui.SchoolApp
 import app.schoolday.update.AppUpdater
@@ -115,8 +116,16 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller, private val sha
         SchoolApp(vm, openRequest, intro, chrome)
     }
 
-    /** schoolday://timetable/<class id>?date=yyyy-MM-dd (from the widget) opens that class on that day. */
+    /**
+     * From the widget: schoolday://timetable/<class id>?date=yyyy-MM-dd opens that class on that day,
+     * schoolday://lunch?date=yyyy-MM-dd (while it shows the menu) the Lunch tab.
+     */
     fun openLink(url: String) {
+        if (url.startsWith("schoolday://lunch")) {
+            if (!intro.finished) intro.cancelled = true
+            openRequest.value = OPEN_LUNCH + url.substringAfter("date=", "").substringBefore('&')
+            return
+        }
         val rest = url.substringAfter("schoolday://timetable/", "")
         val classId = rest.substringBefore('?').trim('/')
         val date = rest.substringAfter("date=", "").substringBefore('&')
@@ -137,7 +146,7 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller, private val sha
     private fun shareWithWidgets(platform: IosPlatform) {
         platform.readCache(LUNCH_CACHE)?.let { shared.write(LUNCH_CACHE, it) }
         MainScope().launch {
-            combine(vm.settings, vm.classes) { s, _ -> WidgetClass(s.myClass, vm.className(s.myClass), s.allMeals, Groups.hidden(s.groups)) }
+            combine(vm.settings, vm.classes) { s, _ -> WidgetClass(s.myClass, vm.className(s.myClass), s.allMeals, Groups.hidden(s.groups), s.groups.keys) }
                 .distinctUntilChanged()
                 .collect { c ->
                     shared.write("myclass.json", buildJsonObject {
@@ -147,6 +156,8 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller, private val sha
                         put("allMeals", c.allMeals)
                         // Lessons of these groups are left out of your class's widgets.
                         put("hiddenGroups", buildJsonArray { c.hiddenGroups.sorted().forEach { add(it) } })
+                        // Splits with a group picked; the others get a "!" on the widget.
+                        put("pickedSplits", buildJsonArray { c.pickedSplits.sorted().forEach { add(it) } })
                     }.toString())
                 }
         }
@@ -154,7 +165,9 @@ class SchoolIos(secure: SecureStore, installer: UpdateInstaller, private val sha
 
     private val openRequest = mutableStateOf<String?>(null)
 
-    private data class WidgetClass(val id: String, val name: String, val allMeals: Boolean, val hiddenGroups: Set<String>)
+    private data class WidgetClass(
+        val id: String, val name: String, val allMeals: Boolean, val hiddenGroups: Set<String>, val pickedSplits: Set<String>,
+    )
 }
 
 /** The lunch menu's cache file, also handed to the widgets. */

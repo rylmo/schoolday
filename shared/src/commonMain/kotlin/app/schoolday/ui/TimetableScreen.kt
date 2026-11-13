@@ -42,6 +42,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,6 +68,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import app.schoolday.data.ChangeKind
+import app.schoolday.data.Groups
 import app.schoolday.data.Lesson
 import app.schoolday.data.Slot
 import app.schoolday.data.TimetableDay
@@ -177,11 +180,15 @@ fun TimetableScreen(
         ) { (cls, m, week) ->
             val s = tts[TtKey(cls, m)]
             val data = s?.data
+            // Your own class: lessons whose group you haven't picked get a "!" (iOS has the picker).
+            val prompt = if (chrome != null && cls == settings.myClass) GroupPrompt(settings.groups) { chrome.askGroup(it) } else null
             ForkRefresh(s?.loading == true, onRefresh = { vm.loadTimetable(cls, m, force = true) }, modifier = Modifier.fillMaxSize()) {
                 when {
                     data == null -> Message(s?.error ?: S.loading)
                     week -> WeekList(data.days, m == TimetableMode.Actual, today) { dayIdx = it; weekView = false }
-                    else -> DayPager(data.days, dayIdx, { dayIdx = it }, m == TimetableMode.Actual, todayIdx) { detail = it }
+                    else -> CompositionLocalProvider(LocalGroupPrompt provides prompt) {
+                        DayPager(data.days, dayIdx, { dayIdx = it }, m == TimetableMode.Actual, todayIdx) { detail = it }
+                    }
                 }
             }
         }
@@ -372,6 +379,21 @@ private fun Band(title: String, period: String?, time: String, lunch: Boolean) {
     }
 }
 
+/** Your picked groups, and what the "!" on a lesson with no group picked opens. */
+private class GroupPrompt(val picks: Map<String, String>, val open: (String) -> Unit)
+
+private val LocalGroupPrompt = compositionLocalOf<GroupPrompt?> { null }
+
+/** A small round "!" asking you to pick your group in this lesson's split. */
+@Composable
+private fun GroupBadge(onClick: () -> Unit) {
+    Box(Modifier.size(28.dp).clip(CircleShape).pressable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(18.dp).clip(CircleShape).background(T.accent), contentAlignment = Alignment.Center) {
+            Text("!", style = Type.tiny.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = T.onAccent)
+        }
+    }
+}
+
 /** One lesson period; groups are merged into one line, details live in the sheet. */
 @Composable
 private fun LessonRow(slot: Slot, isNow: Boolean, onClick: () -> Unit) {
@@ -401,6 +423,9 @@ private fun LessonRow(slot: Slot, isNow: Boolean, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(title, style = Type.bodyStrong, color = T.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (live.size > 1) Text(S.groups(live.size), style = Type.tiny.copy(fontSize = Type.small.fontSize * 0.92f), color = T.text3)
+                    val prompt = LocalGroupPrompt.current
+                    val unset = prompt?.let { Groups.unsetSplit(live, it.picks) }
+                    if (prompt != null && unset != null) GroupBadge { prompt.open(unset) }
                 }
                 Text(mergedMeta(live), style = Type.small, color = T.text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val tags = live.filter { it.kind != ChangeKind.None }.distinctBy { it.kind }
