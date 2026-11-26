@@ -300,6 +300,7 @@ struct TimetableProvider: AppIntentTimelineProvider {
 
     func timeline(for configuration: TimetableWidgetIntent, in context: Context) async -> Timeline<TimetableEntry> {
         let now = Date()
+        WidgetHealth.beat("timetable")
         if configuration.lunchButton, let cls = WidgetData.chosenClass(configuration.schoolClass), WidgetCache.menuMode(cls.id, now: now) {
             let entry = await menuEntry(cls, configuration, context, now: now)
             // Back to the timetable when the menu's hold runs out.

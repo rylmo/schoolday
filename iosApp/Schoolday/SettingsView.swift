@@ -95,7 +95,7 @@ struct SettingsView: View {
                     Text(text.changesTitle)
                 }
                 Button {
-                    UIPasteboard.general.string = bridge.debugInfo()
+                    UIPasteboard.general.string = bridge.debugInfo() + WidgetHealth.line() + "\n"
                     copied = true
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {

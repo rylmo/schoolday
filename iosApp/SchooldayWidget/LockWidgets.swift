@@ -84,6 +84,7 @@ struct LockProvider: AppIntentTimelineProvider {
     /// last entry ("First 8:00" all morning).
     func timeline(for configuration: LockWidgetIntent, in context: Context) async -> Timeline<LockEntry> {
         let now = Date()
+        WidgetHealth.beat("lock-\(mode)")
         let list = await entries(for: configuration, now: now)
         let refresh: TimeInterval = mode == .countdown ? 90 * 60 : 3 * 3600
         return Timeline(entries: list, policy: .after(now.addingTimeInterval(refresh)))
