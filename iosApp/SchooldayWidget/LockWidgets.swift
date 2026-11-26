@@ -79,10 +79,31 @@ struct LockProvider: AppIntentTimelineProvider {
         return await entries(for: configuration, now: Date()).first ?? .sample
     }
 
+    /// Asks for a fresh timeline after a while, but the entries already reach two days ahead: iOS
+    /// often skips or delays that request overnight, and a timeline that ran out kept showing its
+    /// last entry ("First 8:00" all morning).
     func timeline(for configuration: LockWidgetIntent, in context: Context) async -> Timeline<LockEntry> {
-        let list = await entries(for: configuration, now: Date())
-        let last = list.last?.date ?? Date()
-        return Timeline(entries: list, policy: .after(last.addingTimeInterval(60)))
+        let now = Date()
+        let list = await entries(for: configuration, now: now)
+        let refresh: TimeInterval = mode == .countdown ? 90 * 60 : 3 * 3600
+        return Timeline(entries: list, policy: .after(now.addingTimeInterval(refresh)))
+    }
+
+    /// Every moment the widget's text changes over the next two days: each lesson's start and end,
+    /// lunch and the 45 minutes after it, and midnight. Between these the text stays the same.
+    private static func changes(_ days: [WidgetDay], after now: Date) -> [Date] {
+        let horizon = now.addingTimeInterval(2 * 86_400)
+        var times: [Date] = []
+        for day in days {
+            guard let midnight = WidgetDates.date(from: day.date), midnight < horizon,
+                  midnight.addingTimeInterval(86_400) > now else { continue }
+            let reading = DayReading(day)
+            var minutes = reading.rows.flatMap { [$0.start, $0.end] }
+            if let lunch = reading.lunchTime { minutes += [lunch, lunch + 45] }
+            times.append(midnight)
+            times += minutes.map { midnight.addingTimeInterval(TimeInterval($0 * 60)) }
+        }
+        return times.filter { $0 > now && $0 < horizon }
     }
 
     /// The countdown changes every minute; the others every few minutes (the progress bar itself
@@ -98,7 +119,9 @@ struct LockProvider: AppIntentTimelineProvider {
         case .nowNext, .day: (5 * 60, 36)
         }
         let minuteStart = Date(timeIntervalSinceReferenceDate: (now.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
-        let times = [now] + (1 ..< count).map { minuteStart.addingTimeInterval(TimeInterval($0) * step) }
+        let steps = (1 ..< count).map { minuteStart.addingTimeInterval(TimeInterval($0) * step) }
+        // Fine steps for the next while, then only the moments something changes, two days out.
+        let times = [now] + Array(Set(steps + Self.changes(days, after: now))).sorted()
 
         var lunches: [String: WidgetData.LunchShown] = [:]
         var result: [LockEntry] = []

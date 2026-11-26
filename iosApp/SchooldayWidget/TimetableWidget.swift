@@ -347,22 +347,26 @@ struct TimetableProvider: AppIntentTimelineProvider {
         let height = context.displaySize.height > 0 ? context.displaySize.height : 169
         let budget = height - 2 * Metrics.padding - Metrics.headerHeight(small: small) - Metrics.headerGap
 
-        // now, and each lesson end today, so the widget moves on as lessons finish
-        let todayKey = WidgetDates.key(now)
-        let startOfDay = Calendar.current.startOfDay(for: now)
-        let ends = Set(days.first { $0.date == todayKey }?.lessons.map(\.end) ?? [])
+        // now, each lesson end and each midnight for two days, so the widget moves on as lessons
+        // finish even when iOS skips the reload asked for below (it often does overnight, which
+        // left yesterday's plan showing in the morning).
+        let horizon = now.addingTimeInterval(2 * 86_400)
+        var ends = Set<Date>()
+        for day in days {
+            guard let midnight = WidgetDates.date(from: day.date), midnight < horizon else { continue }
+            ends.insert(midnight)
+            day.lessons.forEach { ends.insert(midnight.addingTimeInterval(TimeInterval($0.end * 60))) }
+        }
         // After a tap, skip them: every planned entry is drawn up front, which slows the redraw.
         let tapped = WidgetCache.recentTap(now: now) != nil
-        var moments = tapped ? [] : ends.sorted()
-            .map { startOfDay.addingTimeInterval(TimeInterval($0 * 60)) }
-            .filter { $0 > now }
+        var moments: [Date] = tapped ? [] : ends.filter { $0 > now && $0 < horizon }.sorted()
 
         // A scrolled position holds for a while after the last tap, then the widget goes back to
         // the current lesson at exactly that moment (an entry is planned for it).
         let offset = WidgetCache.offset(cls.id, now: now)
         let resetAt = offset != 0 ? WidgetCache.offsetExpiry(cls.id) : nil
         if let resetAt, resetAt > now { moments.append(resetAt) }
-        let times = [now] + moments.sorted().prefix(10)
+        let times = [now] + moments.sorted().prefix(40)
 
         let direction = WidgetCache.recentTap(now: now) ?? 1
         return times.map { time in
