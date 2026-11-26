@@ -70,13 +70,6 @@ final class AppModel: NSObject, ObservableObject, ChromeListener {
         WhatsNewGate.markSeen()
     }
 
-    /// Days until SideStore's signature runs out, once there are fewer than three.
-    @Published var daysLeft: Int? = SigningExpiry.daysLeft()
-
-    func checkExpiry() {
-        let days = SigningExpiry.daysLeft()
-        if days != daysLeft { withAnimation { daysLeft = days } }
-    }
 
     override init() {
         let installer = SideStoreInstaller()
@@ -129,7 +122,6 @@ struct SchooldayApp: App {
         .onChange(of: phase) { newPhase in
             if newPhase == .active {
                 model.core.onForeground()
-                model.checkExpiry()
                 if model.installer.consumeRecheck() { model.core.recheckUpdate() }
             }
         }

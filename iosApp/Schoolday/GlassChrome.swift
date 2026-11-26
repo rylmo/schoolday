@@ -43,13 +43,6 @@ struct RootView: View {
                     .padding(.top, 6)
                     .transition(.opacity.combined(with: .scale(scale: 0.85)))
             }
-            if model.barVisible, let days = model.daysLeft {
-                ExpiryBanner(days: days, text: model.core.chrome.text)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 72)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
         }
         .alert(model.core.chrome.text.updateTitle, isPresented: updateShown, presenting: model.updateVersion) { _ in
             Button(model.core.chrome.text.updateLater, role: .cancel) { model.core.chrome.dismissUpdate() }
@@ -126,62 +119,6 @@ private struct TopButtons: View {
             .accessibilityLabel(text.settings)
             .modifier(GlassShape(capsule: false))
         }
-    }
-}
-
-/// Shown a few days before SideStore's 7-day signature runs out, in case the refresh automation
-/// didn't run. Tapping it opens SideStore.
-private struct ExpiryBanner: View {
-    let days: Int
-    let text: Strings
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        Button {
-            if let url = URL(string: "sidestore://") { openURL(url) }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "exclamationmark.arrow.circlepath")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color(lunchOrange))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(text.signingExpires(days: Int32(days)))
-                        .font(.subheadline.weight(.semibold))
-                    Text(text.renewInSideStore)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .modifier(GlassShape(capsule: true))
-    }
-}
-
-/// When the signature SideStore put on this app expires. Nil in builds it hasn't signed.
-enum SigningExpiry {
-    static func date() -> Date? {
-        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
-              let data = try? Data(contentsOf: url),
-              let start = data.range(of: Data("<?xml".utf8)),
-              let end = data.range(of: Data("</plist>".utf8), in: start.lowerBound ..< data.endIndex)
-        else { return nil }
-        let plist = data.subdata(in: start.lowerBound ..< end.upperBound)
-        let dict = try? PropertyListSerialization.propertyList(from: plist, format: nil) as? [String: Any]
-        return dict?["ExpirationDate"] as? Date
-    }
-
-    /// Whole days left, or nil while there are still at least three.
-    static func daysLeft(now: Date = Date()) -> Int? {
-        guard let expiry = date() else { return nil }
-        let left = expiry.timeIntervalSince(now)
-        guard left < 3 * 86_400 else { return nil }
-        return max(0, Int(left / 86_400))
     }
 }
 

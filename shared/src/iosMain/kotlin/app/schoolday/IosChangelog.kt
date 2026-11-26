@@ -20,6 +20,14 @@ object IosChangelog {
         Triple(symbol, titleEn to titleCs, bodyEn to bodyCs)
 
     private val entries = listOf(
+        Entry("1.4.1", listOf(
+            note("lock.rotation", "Widgets keep up", "Widgety drží krok",
+                "Lock Screen and Home Screen widgets plan two days ahead, so they no longer get stuck on old lessons.",
+                "Widgety na zamčené obrazovce i na ploše plánují dva dny dopředu, takže už nezůstanou viset na starých hodinách."),
+            note("xmark.circle", "No more wrong expiry warning", "Žádné chybné varování",
+                "The \"stops working in N days\" banner is gone. SideStore renews apps in a way the app can't see, so its count was often wrong; SideStore shows the real one.",
+                "Upozornění „přestane fungovat za N dní“ je pryč. SideStore obnovuje aplikace tak, že to aplikace nevidí, a počet byl často špatně; skutečný ukazuje SideStore."),
+        )),
         Entry("1.4", listOf(
             note("person.2.fill", "Your groups", "Tvoje skupiny",
                 "Pick your group for each split subject at the top of Settings, or tap the ! on a lesson. Timetable, Today and the widgets then show only your lessons.",
